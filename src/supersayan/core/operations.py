@@ -6,16 +6,16 @@ from typing import Union
 
 logger = logging.getLogger(__name__)
 
-def add_lwe(lhs: np.ndarray[LWE], rhs: Union[np.ndarray[LWE], float]) -> np.ndarray[LWE]:
+def add_lwe(lhs: Union[LWE, np.ndarray[LWE]], rhs: Union[float, np.ndarray[LWE]]) -> Union[LWE, np.ndarray[LWE]]:
     """
     Adds LWE ciphertexts.
     
     Args:
-        lhs (np.ndarray[LWE]): The left-hand side array of LWE ciphertexts.
-        rhs (Union[np.ndarray[LWE], float]): The right-hand side operand, which can be either an array of LWE ciphertexts or a scalar.
+        lhs (Union[LWE, np.ndarray[LWE]]): The left-hand side operand, which can be either a single LWE ciphertext or an array of LWE ciphertexts.
+        rhs (Union[float, np.ndarray[LWE]]): The right-hand side operand, which can be either a scalar or an array of LWE ciphertexts.
         
     Returns:
-        np.ndarray[LWE]: The resulting array of LWE ciphertexts after addition.
+        Union[LWE, np.ndarray[LWE]]: The resulting LWE ciphertext or array of LWE ciphertexts after addition.
 
     Raises:
         RuntimeError: If Julia addition fails

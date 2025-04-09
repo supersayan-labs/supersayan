@@ -63,8 +63,7 @@ class Linear(nn.Module):
                 dp = dot_product_lwe(sample_input_list, plain_weight)
                 # Add the bias if available.
                 if bias_np is not None:
-                    # add_lwe expects an array (or list) of LWE objects; here we wrap dp in a list
-                    dp = add_lwe(np.array([dp], dtype=object), bias_np[j])[0]
+                    dp = add_lwe(dp, bias_np[j])
                 sample_out.append(dp)
             output.append(sample_out)
         
@@ -72,4 +71,4 @@ class Linear(nn.Module):
         return np.array(output, dtype=object)
     
     def __repr__(self):
-        return f"EncryptedLinear(in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None})"
+        return f"Linear(in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None})"
