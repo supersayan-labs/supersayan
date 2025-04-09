@@ -1,0 +1,20 @@
+import os
+import logging
+from julia import Julia, Main
+
+logger = logging.getLogger(__name__)
+
+try:
+    jl = Julia(compiled_modules=False)
+except Exception as e:
+    logger.error("Failed to initialize Julia: %s", e)
+    raise
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+julia_file = os.path.join(current_dir, "..", "julia_backend", "SupersayanTFHE.jl")
+julia_file = os.path.normpath(julia_file)
+logger.info("Including Julia backend from: %s", julia_file)
+Main.include(julia_file)
+
+
+__all__ = ["jl"]
