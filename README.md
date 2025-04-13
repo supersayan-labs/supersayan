@@ -1,25 +1,60 @@
-newt week:
-- hybrid architecture running on server + benchmark
-- implement convolution 2D using orion paper
+# 🚀 Supersayan
 
-follow up:
-- implement sparsity
-- compression technique (pruning)
+**Supersayan** is a Python frontend for [Julia SupersayanTFHE](https://github.com/supersayan-org/SupersayanTFHE), enabling **Fully Homomorphic Encryption (FHE)** with a PyTorch-style API for neural networks.
 
+---
 
-option (last step):
-- gpu support
+## 🧱 Prerequisites
 
+To use Supersayan, you’ll need the following installed:
 
-### How to Use
+- Python **3.9+**
+- Julia (**latest stable version** recommended)
 
-To set up the environment, follow these steps:
+### 📦 Install Julia
 
-1. Create a virtual environment with Python 3.9:
-```
-uv venv --python=python3.9
-```
-2. Synchronize the environment:
-```
+- **macOS** (Homebrew):
+  ```bash
+  brew install julia
+  ```
+
+- **Linux** (APT):
+  ```bash
+  sudo apt install julia
+  ```
+
+---
+
+## 🛠️ Setup
+
+### 1. Sync Dependencies
+
+Install all required Python packages:
+```bash
 uv sync
 ```
+
+---
+
+## 🚀 Usage
+
+Coming soon: usage examples and tutorials for building privacy-preserving neural networks on encrypted data using the Supersayan API.
+
+---
+
+## 📅 Development Roadmap
+
+### 🔜 Next Week
+
+- [ ] Build **hybrid server-side architecture**
+- [ ] Run **initial performance benchmarks**
+- [ ] Implement **2D convolution** following concepts from the [Orion FHE paper](https://eprint.iacr.org/2023/1314)
+
+### 📌 Follow-Up Features
+
+- [ ] Add **sparsity support**
+- [ ] Apply **compression techniques** (e.g., pruning)
+
+### 🎯 Final Steps (Optional)
+
+- [ ] Add **GPU acceleration** support
