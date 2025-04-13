@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supersayan"
+version = "0.1.0"
+description = "A Python frontend for Julia SupersayanTFHE Fully Homomorphic Encryption with PyTorch-style NN modules"
+authors = [
+    {name = "Tom Massias Jurien de la Gravière", email = "tom.massiasjuriendelagraviere@epfl.ch"},
+    {name = "Franklin Tranié", email = "franklin.tranie@epfl.ch"}
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "torch",
+    "julia"
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["supersayan"]

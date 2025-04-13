@@ -172,3 +172,14 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# UV configuration file
+uv.lock
+
+# Julia coverage/profiling files
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
+# macOS Finder metadata
+.DS_Store
