@@ -21,8 +21,8 @@ class ModelType(Enum):
     """
     Enum defining the types of supersayan models.
     
-    PURE: All layers are converted to SuperSayan equivalents.
-    HYBRID: Only specified layers are converted to SuperSayan equivalents.
+    PURE: Layer execution is completely in plaintext (no FHE).
+    HYBRID: Specified layers are converted to FHE, others remain in plaintext.
     """
     PURE = "pure"
     HYBRID = "hybrid"
@@ -31,8 +31,8 @@ class SupersayanModel(nn.Module):
     """
     A unified model that can operate in pure or hybrid mode.
     
-    In pure mode, it converts all layers to their SuperSayan equivalents.
-    In hybrid mode, it selectively converts specified layers.
+    In pure mode, all layers run in plaintext (no FHE).
+    In hybrid mode, specified layers are converted to FHE, others remain in plaintext.
     """
     def __init__(
         self, 
@@ -45,7 +45,7 @@ class SupersayanModel(nn.Module):
         
         Args:
             torch_model: The PyTorch model to convert
-            model_type: Whether to create a pure or hybrid model
+            model_type: Whether to create a pure (plaintext) or hybrid (partial FHE) model
             fhe_module_names: List of module names to execute in FHE (required for hybrid mode)
         
         Raises:
@@ -63,13 +63,11 @@ class SupersayanModel(nn.Module):
         self.fhe_module_names = fhe_module_names if fhe_module_names else []
         
         if model_type == ModelType.PURE:
-            # Convert all modules for pure model
-            self.modules_list = nn.ModuleList()
-            for name, module in torch_model.named_children():
-                supersayan_module = self._convert_module(module)
-                self.modules_list.append(supersayan_module)
+            # For pure model, just use the original PyTorch model as-is
+            # No conversion needed as all layers run in plaintext
+            self.torch_model = torch_model
         else:
-            # Convert only specified modules for hybrid model
+            # For hybrid model, convert only specified modules to FHE
             # Validate that the specified module names exist in the model
             all_module_names = dict(torch_model.named_modules())
             for name in self.fhe_module_names:
@@ -80,19 +78,19 @@ class SupersayanModel(nn.Module):
             self.modules_dict = nn.ModuleDict()
             for name, module in torch_model.named_children():
                 if name in self.fhe_module_names:
-                    # Convert to SuperSayan module
+                    # Convert to SuperSayan module for FHE
                     try:
                         supersayan_module = self._convert_module(module)
                         self.modules_dict[name] = supersayan_module
                     except ValueError as e:
                         raise ValueError(f"Failed to convert module '{name}' to SuperSayan: {e}")
                 else:
-                    # Keep as PyTorch module
+                    # Keep as PyTorch module for plaintext execution
                     self.modules_dict[name] = module
     
     def _convert_module(self, module: nn.Module) -> nn.Module:
         """
-        Convert a PyTorch module to its SuperSayan equivalent.
+        Convert a PyTorch module to its SuperSayan equivalent for FHE execution.
         
         Args:
             module: The PyTorch module to convert
@@ -137,51 +135,43 @@ class SupersayanModel(nn.Module):
         else:
             raise ValueError(f"Module of type {module_type.__name__} not supported in SuperSayan. Supported types: {list(LAYER_MAPPING.keys())}")
     
-    def forward(self, x: Union[torch.Tensor, np.ndarray]) -> Union[torch.Tensor, np.ndarray]:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass that handles both pure and hybrid modes.
         
         Args:
-            x: Input data (torch.Tensor for hybrid mode, numpy array of LWE objects for pure mode)
+            x: Input tensor (always torch.Tensor)
             
         Returns:
-            Output data (torch.Tensor for hybrid mode, numpy array of LWE objects for pure mode)
+            Output tensor
         """
         if self.model_type == ModelType.PURE:
             return self._forward_pure(x)
         else:
             return self._forward_hybrid(x)
     
-    def _forward_pure(self, x: np.ndarray) -> np.ndarray:
+    def _forward_pure(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass for pure FHE model with encrypted input.
+        Forward pass for pure model with plaintext execution (no FHE).
         
         Args:
-            x: Encrypted input data (numpy array of LWE objects)
+            x: Input tensor
             
         Returns:
-            Encrypted output (numpy array of LWE objects)
+            Output tensor
         """
-        # Ensure x is a numpy array
-        if not isinstance(x, np.ndarray):
-            logger.warning(f"Expected numpy array as input, got {type(x)}. Attempting to convert.")
-            x = np.array(x, dtype=object)
-            
-        output = x
-        for module in self.modules_list:
-            output = module(output)
-            
-        return output
+        # Simply run the original PyTorch model without any encryption
+        return self.torch_model(x)
     
     def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass for hybrid model with automatic encryption/decryption for FHE modules.
+        Forward pass for hybrid model with selective FHE execution.
         
         Args:
-            x: Unencrypted input data (torch.Tensor)
+            x: Input tensor
             
         Returns:
-            Unencrypted output (torch.Tensor)
+            Output tensor
         """
         output = x
         
@@ -201,7 +191,7 @@ class SupersayanModel(nn.Module):
                 # 4. Decrypt output
                 output = torch.tensor(decrypt(encrypted_output, key), dtype=output.dtype, device=output.device)
             else:
-                # Normal PyTorch module
+                # Normal PyTorch module (plaintext)
                 output = self.modules_dict[name](output)
         
         return output
@@ -217,7 +207,7 @@ def convert_model(
     
     Args:
         torch_model: The PyTorch model to convert
-        model_type: Whether to create a pure or hybrid model
+        model_type: Whether to create a pure (plaintext) or hybrid (partial FHE) model
         fhe_module_names: List of module names to execute in FHE (required for hybrid mode)
         
     Returns:
@@ -231,11 +221,13 @@ def convert_to_pure_supersayan(torch_model: nn.Module) -> SupersayanModel:
     """
     Convert a PyTorch model to a Pure SuperSayan model.
     
+    In a Pure model, all layers run in plaintext (no FHE).
+    
     Args:
         torch_model: The PyTorch model to convert
         
     Returns:
-        A Pure SuperSayan model that takes encrypted inputs and produces encrypted outputs
+        A Pure SuperSayan model that executes all layers in plaintext
     """
     return convert_model(torch_model, ModelType.PURE)
 
@@ -244,12 +236,13 @@ def convert_to_hybrid_supersayan(torch_model: nn.Module, fhe_module_names: List[
     """
     Convert a PyTorch model to a Hybrid SuperSayan model.
     
+    In a Hybrid model, specified layers are converted to FHE, others remain in plaintext.
+    
     Args:
         torch_model: The PyTorch model to convert
         fhe_module_names: List of module names to execute in FHE
         
     Returns:
-        A Hybrid SuperSayan model that takes unencrypted inputs, 
-        processes specified modules with encryption, and produces unencrypted outputs
+        A Hybrid SuperSayan model that selectively executes layers with FHE
     """
     return convert_model(torch_model, ModelType.HYBRID, fhe_module_names)

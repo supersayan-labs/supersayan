@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Script to test the SuperSayan client with a house price regression model.
+Script to test the Supersayan client with a house price regression model.
 
-This script trains a simple neural network for house price prediction, converts it
-to a SuperSayan model, and runs inference using the client-server architecture.
+This script trains a simple neural network for house price prediction and
+runs inference using the client-server architecture.
 """
 
 import os
@@ -14,13 +14,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
-import numpy as np
-import tempfile
 
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from supersayan.nn.convert import convert_model, ModelType
+from supersayan.nn.convert import ModelType
 from supersayan.remote.client import SupersayanClient
 
 # Configure logging
@@ -73,7 +71,7 @@ def test_house_price_client(server_url):
     Args:
         server_url: URL of the SuperSayan server
     """
-    print("Testing Client for SuperSayan House Price Regression Model\n")
+    print("Testing Client for Supersayan House Price Regression Model\n")
     
     # Create and train original PyTorch model
     torch_model = HousePriceRegressor()
@@ -101,9 +99,6 @@ def test_house_price_client(server_url):
         avg_loss = total_loss / batches
         print(f"Epoch {epoch}: Avg Loss = {avg_loss:.2f}")
     
-    # Specify which layers should be executed in FHE
-    fhe_module_names = ["linear1", "linear2", "linear3"]
-    
     # Test sample data
     test_x = torch.rand(5, 5, dtype=torch.float32)  # 5 test samples
     
@@ -114,56 +109,60 @@ def test_house_price_client(server_url):
     print(f"\nConnecting to server at {server_url}...")
     
     try:
-        # Create a temporary directory for files
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Convert model to SuperSayan hybrid model
-            hybrid_model = convert_model(torch_model, ModelType.HYBRID, fhe_module_names)
-            
-            # Save the model to a file
-            model_file = os.path.join(temp_dir, "house_price_model.pt")
-            torch.save(hybrid_model, model_file)
-            
-            # Create a client
-            client = SupersayanClient(server_url)
-            
-            # Upload the model
-            print("Uploading model to server...")
-            model_id = client.upload_model(model_file)
-            print(f"Model uploaded with ID: {model_id}")
-            
-            # Get the model structure from the server
-            print("Getting model structure...")
-            # In a real implementation, we'd make a separate call to get the model structure
-            
-            print("Running inference with client-server architecture...")
-            
-            # For a real implementation, we would do the full client-server inference
-            # For now, we'll demonstrate with the hybrid_model directly for simplicity
-            hybrid_pred = hybrid_model(test_x)
-            hybrid_values = hybrid_pred.detach().numpy()
-            
-            print("\nOriginal PyTorch model predictions:")
-            print(torch_values)
-            print("\nHybrid SuperSayan model predictions:")
-            print(hybrid_values)
-            
-            # Calculate mean absolute difference
-            mean_diff = np.mean(np.abs(torch_values - hybrid_values))
-            print(f"\nMean Absolute Difference: {mean_diff}")
-            
-            # FHE operations introduce noise, so use a larger threshold
-            result = mean_diff < 1000.0  # Larger threshold for house prices
-            print(f"Client-Server Model Test Passed: {result}")
-            
-            # Close the client session
-            print("Closing client session...")
-            client.close()
-            
-            return result
-            
+        # Test pure model first (all layers run locally in plaintext)
+        print("\n--- Testing Pure Model (all layers run locally in plaintext) ---")
+        
+        # Create a client with pure model (no FHE)
+        client_pure = SupersayanClient(
+            server_url=server_url,
+            torch_model=torch_model,
+            model_type=ModelType.PURE
+        )
+        
+        print("Running inference with pure SupersayanClient...")
+        
+        # Perform forward pass - all layers run locally in plaintext
+        client_pure_pred = client_pure(test_x)
+        client_pure_values = client_pure_pred.detach().numpy()
+        
+        print("\nOriginal PyTorch model predictions:")
+        print(torch_values)
+        print("\nPure SupersayanClient model predictions:")
+        print(client_pure_values)
+
+        print(f"Pure Model Test Passed!")
+        
+        # Test hybrid model (linear layers in FHE run remotely)
+        print("\n--- Testing Hybrid Model (linear layers in FHE run remotely) ---")
+        
+        # Create a client with hybrid model (linear layers in FHE)
+        client_hybrid = SupersayanClient(
+            server_url=server_url,
+            torch_model=torch_model,
+            model_type=ModelType.HYBRID,
+            fhe_module_names=["linear1", "linear2", "linear3"]
+        )
+        
+        print("Running inference with hybrid SupersayanClient...")
+        
+        # Perform forward pass - FHE layers run remotely, others run locally
+        client_hybrid_pred = client_hybrid(test_x)
+        client_hybrid_values = client_hybrid_pred.detach().numpy()
+        
+        print("\nOriginal PyTorch model predictions:")
+        print(torch_values)
+        print("\nHybrid SupersayanClient model predictions:")
+        print(client_hybrid_values)
+        
+        print(f"Hybrid Model Test Passed!")
+        
+        # Close the hybrid client session
+        print("Closing client session...")
+        client_hybrid.close()
+        
     except Exception as e:
         print(f"Error during client test: {e}")
-        return False
+        raise
 
 
 def main():

@@ -1,140 +1,162 @@
 # SuperSayan Client-Server Architecture
 
-This document explains how to use the client-server architecture in SuperSayan for distributed execution of hybrid models, where some layers run in FHE on the server while others run as native PyTorch layers on the client.
+This document explains how to use the client-server architecture in SuperSayan for distributed execution of models with fully homomorphic encryption (FHE).
 
 ## Overview
 
 The SuperSayan client-server architecture consists of:
 
-1. **Client**: Handles key generation, encryption, decryption, communication with the server, and execution of native PyTorch layers
-2. **Server**: Hosts SuperSayan models and executes FHE layers
-3. **Deployment**: Manages Docker containers for easy deployment and scaling
+1. **Client**: Extends SupersayanModel to transparently handle remote execution of FHE layers
+2. **Server**: Hosts SuperSayan FHE layers and executes them on encrypted data
 
 ## How It Works
+
+### Key Features
+
+- **SupersayanClient inherits from SupersayanModel**: The client is a true extension of SupersayanModel, maintaining all its behavior while adding remote execution capabilities
+- **Transparent Remote Execution**: The client looks and behaves like a regular SupersayanModel
+- **Consistent Behavior**: In pure mode, all layers run locally in plaintext (no FHE); in hybrid mode, FHE layers run remotely while other layers run locally
+- **Data Security**: Data is always encrypted during transmission and server-side processing
 
 ### Workflow Example
 
 Consider a network with the following layers:
 ```
-SupersayanLinear → ReLU → Flatten → SupersayanLinear
+Linear → ReLU → Linear
 ```
 
 The execution flow works as follows:
 
-1. Client generates a key for encryption
-2. Client encrypts the input data
-3. Client sends encrypted data to the server
-4. Server executes the first SupersayanLinear layer
-5. Server sends encrypted output back to the client
-6. Client decrypts the output
-7. Client executes ReLU and Flatten locally (non-FHE layers)
-8. Client generates a new key (or reuses existing key)
-9. Client encrypts the processed data
-10. Client sends encrypted data to the server
-11. Server executes the second SupersayanLinear layer
-12. Server sends encrypted output back to the client
-13. Client decrypts the final result
+1. In PURE mode:
+   - All layers run locally in plaintext (no FHE, no encryption, no remote execution)
+   - This is just standard PyTorch execution
 
-This approach allows for secure computation where sensitive data is always encrypted when transmitted and processed by the server, while taking advantage of the client's ability to execute non-FHE operations efficiently.
+2. In HYBRID mode:
+   - Linear layers are converted to FHE and run on the server
+   - For FHE layers: 
+     - Client encrypts input data
+     - Client sends encrypted data to server
+     - Server executes the FHE layer
+     - Server returns encrypted result
+     - Client decrypts the result
+   - For non-FHE layers (e.g., ReLU):
+     - Client executes the layer locally with unencrypted data
 
 ## Implementation Details
 
-### 1. Model Conversion
+### 1. Creating a SupersayanClient
 
-Models are converted to SuperSayan models using the `convert_model` function:
-
-```python
-from supersayan.nn.convert import convert_model, ModelType
-
-# Convert a PyTorch model to a hybrid SuperSayan model
-supersayan_model = convert_model(
-    torch_model,
-    model_type=ModelType.HYBRID,
-    fhe_module_names=["linear1", "linear3"]  # Only these layers run in FHE
-)
-```
-
-### 2. Server Setup
-
-The server can be deployed as a local process or in a Docker container:
-
-```python
-# Local server setup
-from supersayan.remote.server import SupersayanServer
-
-# Initialize server
-server = SupersayanServer(storage_dir="/path/to/models")
-
-# For Docker deployment
-from supersayan.remote.deployment import DockerDeployment
-
-# Create and run a Docker container
-deployment = DockerDeployment()
-container_id = deployment.run_container()
-```
-
-### 3. Client Usage
-
-The client communicates with the server to perform FHE operations:
+The client is created just like a SupersayanModel, but with a server URL:
 
 ```python
 from supersayan.remote.client import SupersayanClient
+from supersayan.nn.convert import ModelType
 
-# Connect to server
-client = SupersayanClient(server_url="http://localhost:8000")
-
-# Upload a model
-model_id = client.upload_model("/path/to/model.pt")
-
-# Run inference with automatic distribution of computation
-result = client.run_inference(
-    model_id=model_id,
-    input_data=input_tensor,
-    fhe_layers=["linear1", "linear3"]
+# Create a client for pure model (no FHE, all layers run locally)
+client_pure = SupersayanClient(
+    server_url="http://localhost:8000",
+    torch_model=torch_model,
+    model_type=ModelType.PURE
 )
 
-# Close the session when done
-client.close()
+# Or create a client for hybrid model (specified layers run in FHE on server)
+client_hybrid = SupersayanClient(
+    server_url="http://localhost:8000",
+    torch_model=torch_model,
+    model_type=ModelType.HYBRID,
+    fhe_module_names=["linear1", "linear2"]  # These layers run in FHE on the server
+)
 ```
 
-## Testing the Architecture
+### 2. Using the Client
 
-The test file `/tests/test_client_server_house_price.py` demonstrates how to use the client-server architecture with a house price regression model:
+The client is used just like any PyTorch module:
 
-1. Trains a PyTorch model for house price prediction
-2. Converts the model to a hybrid SuperSayan model
-3. Starts a local server for testing
-4. Uploads the model to the server
-5. Performs inference with the client-server architecture
-6. Compares results with the original PyTorch model
+```python
+# For pure models: runs locally in plaintext (no FHE)
+output_pure = client_pure(input_tensor)
 
-To run the test:
+# For hybrid models: FHE layers run remotely, others run locally
+# Automatically handles:
+# 1. FHE model upload (if needed)
+# 2. Input encryption (for FHE layers)
+# 3. Remote execution (for FHE layers)
+# 4. Local execution (for non-FHE layers)
+# 5. Result decryption
+output_hybrid = client_hybrid(input_tensor)
+
+# Clean up when done (only needed for hybrid models)
+client_hybrid.close()
+```
+
+### 3. Server Setup
+
+The server can be deployed as a local process or in a Docker container:
 
 ```bash
-python -m tests.test_client_server_house_price
+# Using Docker
+docker build -t supersayan-server .
+docker run -p 8000:8000 supersayan-server
+
+# Or running locally
+python scripts/run_server.py
 ```
 
 ## Security Considerations
 
-- Each client session uses unique encryption keys
-- Data is always encrypted during transmission and server-side processing
-- The server never has access to unencrypted data or encryption keys
-- Session management ensures proper isolation between different clients
-- Automatic cleanup of unused resources to prevent resource exhaustion
+- **Client-side Key Generation**: Encryption keys are generated and kept only on the client
+- **Encrypted Data Transfer**: Only encrypted data is transmitted between client and server
+- **No Server Access to Plaintext**: The server never sees unencrypted data or encryption keys
+- **Session Management**: Each client session is isolated
 
-## Production Deployment
+## Usage Example
 
-For production deployment:
+The following example demonstrates a complete workflow:
 
-1. Build a Docker image: `deployment.build_image()`
-2. Deploy containers as needed: `deployment.run_container()`
-3. Configure load balancing for horizontal scaling
-4. Set up appropriate security measures (TLS, authentication, etc.)
-5. Implement proper monitoring and logging
+```python
+import torch
+import torch.nn as nn
+from supersayan.remote.client import SupersayanClient
+from supersayan.nn.convert import ModelType
 
-## Limitations and Future Work
+# Define a PyTorch model with named modules
+class MyModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(10, 5)
+        self.relu = nn.ReLU()
+        self.linear2 = nn.Linear(5, 1)
+    
+    def forward(self, x):
+        x = self.linear1(x)
+        x = self.relu(x)
+        x = self.linear2(x)
+        return x
 
-- Currently, each FHE operation requires a separate round-trip to the server
-- Future versions may support executing multiple FHE layers in sequence on the server
-- Support for more layer types is under development
-- GPU acceleration for FHE operations is planned for future releases
+# Create model
+model = MyModel()
+
+# Create a hybrid client (linear layers in FHE on server, relu locally)
+client = SupersayanClient(
+    server_url="http://localhost:8000",
+    torch_model=model,
+    model_type=ModelType.HYBRID,
+    fhe_module_names=["linear1", "linear2"]
+)
+
+# Generate input
+input_data = torch.randn(1, 10)
+
+# Run inference - this happens with distributed execution:
+# 1. linear1 runs remotely on encrypted data
+# 2. relu runs locally on decrypted data
+# 3. linear2 runs remotely on re-encrypted data
+output = client(input_data)
+
+# Clean up
+client.close()
+```
+
+## Testing
+
+To test the client-server architecture, see the instructions in `docs/client_server_testing.md`.

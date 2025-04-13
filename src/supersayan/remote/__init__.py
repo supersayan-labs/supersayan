@@ -9,10 +9,8 @@ native torch layers.
 
 from .client import SupersayanClient
 from .server import SupersayanServer
-from .deployment import DockerDeployment
 
 __all__ = [
     "SupersayanClient",
-    "SupersayanServer",
-    "DockerDeployment",
+    "SupersayanServer"
 ]

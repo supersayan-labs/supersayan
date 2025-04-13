@@ -1,19 +1,19 @@
 import logging
 import torch
-import torch.nn as nn
 import numpy as np
-import json
 import uuid
 import pickle
 import base64
 import os
-from typing import Dict, List, Optional, Tuple, Union, Any
 from concurrent.futures import ThreadPoolExecutor
 import threading
 from datetime import datetime, timedelta
 import time
 
-from supersayan.nn.convert import SupersayanModel, ModelType, convert_model
+# Add safe_globals for ModuleDict early to avoid reference errors
+from torch.nn.modules.container import ModuleDict
+import torch.serialization
+torch.serialization.add_safe_globals([ModuleDict])
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +90,24 @@ class ModelStore:
             # Lazy load the model if needed
             if model_info["model"] is None:
                 try:
-                    model_info["model"] = torch.load(model_info["path"])
+                    # First try with weights_only=False (most compatible option)
+                    # This is safe in our controlled environment
+                    model_info["model"] = torch.load(
+                        model_info["path"],
+                        weights_only=False,
+                        map_location=torch.device('cpu')
+                    )
                 except Exception as e:
-                    raise ValueError(f"Failed to load model {model_id}: {e}")
+                    try:
+                        # If that fails, try with weights_only=True and safe_globals
+                        model_info["model"] = torch.load(
+                            model_info["path"],
+                            weights_only=True,
+                            map_location=torch.device('cpu')
+                        )
+                    except Exception as e2:
+                        logger.error(f"Failed to load model {model_id}: {str(e)} then {str(e2)}")
+                        raise ValueError(f"Failed to load model {model_id}: {e}")
             
             return model_info
     
@@ -247,7 +262,7 @@ class SupersayanServer:
     """
     Server for hosting SuperSayan models and performing remote FHE inference.
     
-    Handles model deployment, layer execution, and client session management.
+    Handles model management, layer execution, and client session management.
     """
     def __init__(
         self, 
@@ -354,9 +369,55 @@ class SupersayanServer:
             layer = getattr(model, layer_name)
             encrypted_output = layer(encrypted_input)
             
-            # Encode output
-            encrypted_output_bytes = pickle.dumps(encrypted_output)
-            encrypted_output_base64 = base64.b64encode(encrypted_output_bytes).decode('utf-8')
+            # Process the encrypted output based on its type
+            try:
+                # Handle different output types
+                if isinstance(encrypted_output, np.ndarray) and encrypted_output.dtype == object:
+                    # If it's an array of LWE or Julia objects
+                    lwe_dicts = []
+                    for item in encrypted_output.flatten():
+                        if hasattr(item, "to_dict"):
+                            # Use to_dict method if available
+                            lwe_dicts.append(item.to_dict())
+                        elif hasattr(item, "mask") and hasattr(item, "masked"):
+                            # If it's a Julia LWE object, convert to our LWE type first
+                            from supersayan.core.types import LWE
+                            python_lwe = LWE.from_julia(item)
+                            lwe_dicts.append(python_lwe.to_dict())
+                        else:
+                            # Unknown type - convert to string
+                            lwe_dicts.append({"data": str(item), "type": "unknown"})
+                    
+                    # Create a serializable structure with shape information
+                    serializable_output = {
+                        "data": lwe_dicts, 
+                        "type": "lwe_array",
+                        "shape": encrypted_output.shape
+                    }
+                    
+                    # Encode the dict representation
+                    encrypted_output_bytes = pickle.dumps(serializable_output)
+                elif hasattr(encrypted_output, "to_dict"):
+                    # Single LWE object
+                    serializable_output = encrypted_output.to_dict()
+                    encrypted_output_bytes = pickle.dumps(serializable_output)
+                elif hasattr(encrypted_output, "mask") and hasattr(encrypted_output, "masked"):
+                    # Julia LWE object
+                    from supersayan.core.types import LWE
+                    python_lwe = LWE.from_julia(encrypted_output)
+                    serializable_output = python_lwe.to_dict()
+                    encrypted_output_bytes = pickle.dumps(serializable_output)
+                else:
+                    # Try direct serialization for anything else
+                    encrypted_output_bytes = pickle.dumps(encrypted_output)
+                
+                encrypted_output_base64 = base64.b64encode(encrypted_output_bytes).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Serialization error: {e}")
+                # Fall back to string representation
+                error_output = {"error": str(e), "data": str(encrypted_output), "type": "error"}
+                encrypted_output_bytes = pickle.dumps(error_output)
+                encrypted_output_base64 = base64.b64encode(encrypted_output_bytes).decode('utf-8')
             
             return {"encrypted_output": encrypted_output_base64}
         except ValueError as e:

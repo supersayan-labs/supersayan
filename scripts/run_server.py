@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to run a SuperSayan server.
+Script to run a Supersayan server.
 
 This script starts a FastAPI server that provides endpoints for uploading models,
 retrieving model structure, and performing inference with FHE layers.
@@ -18,6 +18,11 @@ from typing import Dict, Any
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Initialize Julia first, before importing other modules
+from supersayan.core.bindings import initialize_julia
+initialize_julia()
+
+# Now import the server module
 from supersayan.remote.server import SupersayanServer
 
 # Configure logging
@@ -28,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app
-app = FastAPI(title="SuperSayan FHE Server")
+app = FastAPI(title="Supersayan FHE Server")
 
 # Initialize server
 server = None
@@ -103,7 +108,7 @@ async def health_check():
     return {"status": "healthy"}
 
 def main():
-    parser = argparse.ArgumentParser(description="Run a SuperSayan server")
+    parser = argparse.ArgumentParser(description="Run a Supersayan server")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind")
     parser.add_argument("--models-dir", type=str, default="/tmp/supersayan/models", help="Directory for storing models")
