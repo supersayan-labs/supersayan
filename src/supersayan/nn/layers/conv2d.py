@@ -7,7 +7,7 @@ import math
 
 from supersayan.core.operations import add_lwe, dot_product_lwe
 from supersayan.core.types import LWE
-from supersayan.core.bindings import jl
+from supersayan.core.bindings import SupersayanTFHE
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-from .bindings import jl
+from .bindings import SupersayanTFHE
 
 def generate_secret_key() -> list[int]:
     """
@@ -8,6 +8,6 @@ def generate_secret_key() -> list[int]:
     Returns:
         list[int]: The secret key as a list of integers
     """
-    key = jl.SupersayanTFHE.Encryption.generate_key()
+    key = SupersayanTFHE.Encryption.generate_key()
     
     return list(key)

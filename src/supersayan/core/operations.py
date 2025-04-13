@@ -1,6 +1,6 @@
 import logging
 import numpy as np
-from .bindings import jl
+from .bindings import SupersayanTFHE
 from .types import LWE
 from typing import Union
 
@@ -21,7 +21,7 @@ def add_lwe(lhs: Union[LWE, np.ndarray[LWE]], rhs: Union[float, np.ndarray[LWE]]
         RuntimeError: If Julia addition fails
     """
     try:
-        return jl.SupersayanTFHE.Operations.add(lhs, rhs)
+        return SupersayanTFHE.Operations.add(lhs, rhs)
     except Exception as e:
         logger.error("LWE addition failed: %s", e)
         raise RuntimeError(f"LWE addition failed: {e}") from e
@@ -46,7 +46,7 @@ def dot_product_lwe(enc_vec: np.ndarray[LWE], plain_vec: np.ndarray[float]) -> L
     zero_cipher = LWE(np.zeros(mask_length, dtype=np.float64), 0.0)
     
     try:
-        result = jl.SupersayanTFHE.Operations.dot_product(enc_vec, plain_vec, zero_cipher)
+        result = SupersayanTFHE.Operations.dot_product(enc_vec, plain_vec, zero_cipher)
         return LWE.from_julia(result)
     except Exception as e:
         logger.error("Encrypted dot product failed: %s", e)

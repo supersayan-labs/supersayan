@@ -2,7 +2,7 @@ import logging
 import numpy as np
 import torch
 from typing import List, Union, Optional, overload
-from .bindings import jl
+from .bindings import SupersayanTFHE
 from .types import LWE
 
 logger = logging.getLogger(__name__)
@@ -32,9 +32,9 @@ def encrypt(mu: Union[float, torch.Tensor], key: List[float], sigma: Optional[fl
     if isinstance(mu, float) or isinstance(mu, int):
         try:
             if sigma is not None:
-                result = jl.SupersayanTFHE.Encryption.encrypt_torus_to_lwe(float(mu), key, sigma)
+                result = SupersayanTFHE.Encryption.encrypt_torus_to_lwe(float(mu), key, sigma)
             else:
-                result = jl.SupersayanTFHE.Encryption.encrypt_torus_to_lwe(float(mu), key)
+                result = SupersayanTFHE.Encryption.encrypt_torus_to_lwe(float(mu), key)
             return LWE.from_julia(result)
         except Exception as e:
             logger.error(f"Julia encryption failed for single value: {e}")
@@ -50,9 +50,9 @@ def encrypt(mu: Union[float, torch.Tensor], key: List[float], sigma: Optional[fl
         # Encrypt using Julia backend (works with 1D array only)
         try:
             if sigma is not None:
-                encrypted_flat = jl.SupersayanTFHE.Encryption.encrypt_torus_to_lwe_vec(mu_np_flat, key, sigma)
+                encrypted_flat = SupersayanTFHE.Encryption.encrypt_torus_to_lwe_vec(mu_np_flat, key, sigma)
             else:
-                encrypted_flat = jl.SupersayanTFHE.Encryption.encrypt_torus_to_lwe_vec(mu_np_flat, key)
+                encrypted_flat = SupersayanTFHE.Encryption.encrypt_torus_to_lwe_vec(mu_np_flat, key)
         except Exception as e:
             logger.error(f"Julia encryption failed for tensor: {e}")
             raise RuntimeError(f"Encryption failed: {e}") from e
@@ -94,7 +94,7 @@ def decrypt(ciphertext: Union[LWE, np.ndarray], key: List[float], p: int = 5) ->
     # Handle single LWE object
     if isinstance(ciphertext, LWE):
         try:
-            return jl.SupersayanTFHE.Encryption.decrypt_lwe_to_torus(ciphertext, key, p)
+            return SupersayanTFHE.Encryption.decrypt_lwe_to_torus(ciphertext, key, p)
         except Exception as e:
             logger.error(f"Julia decryption failed for single LWE: {e}")
             raise RuntimeError(f"Decryption failed: {e}") from e
@@ -107,7 +107,7 @@ def decrypt(ciphertext: Union[LWE, np.ndarray], key: List[float], p: int = 5) ->
             
         try:
             # Decrypt the flattened array
-            decrypted_values = jl.SupersayanTFHE.Encryption.decrypt_lwe_to_torus_vec(flat_ciphertexts, key, p)
+            decrypted_values = SupersayanTFHE.Encryption.decrypt_lwe_to_torus_vec(flat_ciphertexts, key, p)
         except Exception as e:
             logger.error(f"Julia decryption failed for array: {e}")
             raise RuntimeError(f"Decryption failed: {e}") from e
