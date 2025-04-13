@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""
+Script to run a SuperSayan server.
+
+This script starts a FastAPI server that provides endpoints for uploading models,
+retrieving model structure, and performing inference with FHE layers.
+"""
+
+import os
+import sys
+import logging
+import argparse
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
+from typing import Dict, Any
+
+# Add parent directory to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from supersayan.remote.server import SupersayanServer
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Create FastAPI app
+app = FastAPI(title="SuperSayan FHE Server")
+
+# Initialize server
+server = None
+
+# Request models
+class UploadModelRequest(BaseModel):
+    session_id: str
+    model_data: str
+
+class InferenceRequest(BaseModel):
+    session_id: str
+    encrypted_input: str
+
+class SessionRequest(BaseModel):
+    session_id: str
+
+# API routes
+@app.post("/models/upload")
+async def upload_model(request: UploadModelRequest):
+    response = server.handle_upload_model(
+        request.session_id,
+        request.model_data
+    )
+    
+    if isinstance(response, tuple):
+        response_data, status_code = response
+        if status_code != 200:
+            raise HTTPException(status_code=status_code, detail=response_data["error"])
+        return response_data
+    return response
+
+@app.get("/models/{model_id}/structure")
+async def get_model_structure(model_id: str):
+    response = server.handle_get_model_structure(model_id)
+    
+    if isinstance(response, tuple):
+        response_data, status_code = response
+        if status_code != 200:
+            raise HTTPException(status_code=status_code, detail=response_data["error"])
+        return response_data
+    return response
+
+@app.post("/inference/{model_id}/{layer_name}")
+async def inference(model_id: str, layer_name: str, request: InferenceRequest):
+    response = server.handle_inference(
+        request.session_id,
+        model_id,
+        layer_name,
+        request.encrypted_input
+    )
+    
+    if isinstance(response, tuple):
+        response_data, status_code = response
+        if status_code != 200:
+            raise HTTPException(status_code=status_code, detail=response_data["error"])
+        return response_data
+    return response
+
+@app.post("/sessions/{session_id}/close")
+async def close_session(session_id: str, request: SessionRequest):
+    response = server.handle_close_session(request.session_id)
+    
+    if isinstance(response, tuple):
+        response_data, status_code = response
+        if status_code != 200:
+            raise HTTPException(status_code=status_code, detail=response_data["error"])
+        return response_data
+    return response
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
+
+def main():
+    parser = argparse.ArgumentParser(description="Run a SuperSayan server")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind")
+    parser.add_argument("--port", type=int, default=8000, help="Port to bind")
+    parser.add_argument("--models-dir", type=str, default="/tmp/supersayan/models", help="Directory for storing models")
+    args = parser.parse_args()
+    
+    # Create models directory if it doesn't exist
+    os.makedirs(args.models_dir, exist_ok=True)
+    
+    # Initialize the server
+    global server
+    server = SupersayanServer(storage_dir=args.models_dir)
+    
+    logger.info(f"Starting server on {args.host}:{args.port}")
+    logger.info(f"Using models directory: {args.models_dir}")
+    
+    # Start the server
+    uvicorn.run(app, host=args.host, port=args.port)
+
+if __name__ == "__main__":
+    main()

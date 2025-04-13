@@ -2,7 +2,8 @@ import logging
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union, Type, Any
+from typing import Dict, List, Optional, Tuple, Union, Type, Any, Callable
+from enum import Enum
 
 from supersayan.core.encryption import encrypt, decrypt
 from supersayan.core.keygen import generate_secret_key
@@ -16,49 +17,96 @@ LAYER_MAPPING = {
     # Add more mappings as more layers are implemented
 }
 
-class PureSupersayanModel(nn.Module):
+class ModelType(Enum):
     """
-    A model that operates entirely on encrypted data.
+    Enum defining the types of supersayan models.
     
-    It converts all layers of a PyTorch model to their Supersayan equivalents
-    and performs operations on encrypted data.
+    PURE: All layers are converted to SuperSayan equivalents.
+    HYBRID: Only specified layers are converted to SuperSayan equivalents.
     """
-    def __init__(self, torch_model: nn.Module):
+    PURE = "pure"
+    HYBRID = "hybrid"
+
+class SupersayanModel(nn.Module):
+    """
+    A unified model that can operate in pure or hybrid mode.
+    
+    In pure mode, it converts all layers to their SuperSayan equivalents.
+    In hybrid mode, it selectively converts specified layers.
+    """
+    def __init__(
+        self, 
+        torch_model: nn.Module, 
+        model_type: ModelType = ModelType.PURE,
+        fhe_module_names: Optional[List[str]] = None
+    ):
         """
-        Initialize a Pure Supersayan model from a PyTorch model.
+        Initialize a SuperSayan model from a PyTorch model.
         
         Args:
             torch_model: The PyTorch model to convert
+            model_type: Whether to create a pure or hybrid model
+            fhe_module_names: List of module names to execute in FHE (required for hybrid mode)
         
         Raises:
-            ValueError: If a layer in the PyTorch model doesn't have a Supersayan equivalent
+            ValueError: If a layer doesn't have a SuperSayan equivalent or if 
+                        fhe_module_names are not provided in hybrid mode
         """
-        super(PureSupersayanModel, self).__init__()
+        super(SupersayanModel, self).__init__()
         self.original_model = torch_model
-        self.supersayan_modules = nn.ModuleList()
+        self.model_type = model_type
         
-        # Convert each module in the PyTorch model
-        for name, module in torch_model.named_children():
-            supersayan_module = self._convert_module(module)
-            self.supersayan_modules.append(supersayan_module)
+        # For hybrid model, fhe_module_names must be provided
+        if model_type == ModelType.HYBRID and not fhe_module_names:
+            raise ValueError("For hybrid model, fhe_module_names must be provided")
+        
+        self.fhe_module_names = fhe_module_names if fhe_module_names else []
+        
+        if model_type == ModelType.PURE:
+            # Convert all modules for pure model
+            self.modules_list = nn.ModuleList()
+            for name, module in torch_model.named_children():
+                supersayan_module = self._convert_module(module)
+                self.modules_list.append(supersayan_module)
+        else:
+            # Convert only specified modules for hybrid model
+            # Validate that the specified module names exist in the model
+            all_module_names = dict(torch_model.named_modules())
+            for name in self.fhe_module_names:
+                if name not in all_module_names:
+                    raise ValueError(f"Module '{name}' not found in the model. Available modules: {list(all_module_names.keys())}")
+            
+            # Convert modules selectively
+            self.modules_dict = nn.ModuleDict()
+            for name, module in torch_model.named_children():
+                if name in self.fhe_module_names:
+                    # Convert to SuperSayan module
+                    try:
+                        supersayan_module = self._convert_module(module)
+                        self.modules_dict[name] = supersayan_module
+                    except ValueError as e:
+                        raise ValueError(f"Failed to convert module '{name}' to SuperSayan: {e}")
+                else:
+                    # Keep as PyTorch module
+                    self.modules_dict[name] = module
     
     def _convert_module(self, module: nn.Module) -> nn.Module:
         """
-        Convert a PyTorch module to its Supersayan equivalent.
+        Convert a PyTorch module to its SuperSayan equivalent.
         
         Args:
             module: The PyTorch module to convert
             
         Returns:
-            The converted Supersayan module
+            The converted SuperSayan module
             
         Raises:
-            ValueError: If the module type doesn't have a Supersayan equivalent
+            ValueError: If the module type doesn't have a SuperSayan equivalent
         """
         module_type = type(module)
         
         if module_type in LAYER_MAPPING:
-            # Get the Supersayan equivalent class
+            # Get the SuperSayan equivalent class
             supersayan_class = LAYER_MAPPING[module_type]
             
             if module_type == nn.Linear:
@@ -89,9 +137,24 @@ class PureSupersayanModel(nn.Module):
         else:
             raise ValueError(f"Module of type {module_type.__name__} not supported in SuperSayan. Supported types: {list(LAYER_MAPPING.keys())}")
     
-    def forward(self, x: np.ndarray) -> np.ndarray:
+    def forward(self, x: Union[torch.Tensor, np.ndarray]) -> Union[torch.Tensor, np.ndarray]:
         """
-        Forward pass with encrypted input.
+        Forward pass that handles both pure and hybrid modes.
+        
+        Args:
+            x: Input data (torch.Tensor for hybrid mode, numpy array of LWE objects for pure mode)
+            
+        Returns:
+            Output data (torch.Tensor for hybrid mode, numpy array of LWE objects for pure mode)
+        """
+        if self.model_type == ModelType.PURE:
+            return self._forward_pure(x)
+        else:
+            return self._forward_hybrid(x)
+    
+    def _forward_pure(self, x: np.ndarray) -> np.ndarray:
+        """
+        Forward pass for pure FHE model with encrypted input.
         
         Args:
             x: Encrypted input data (numpy array of LWE objects)
@@ -105,105 +168,14 @@ class PureSupersayanModel(nn.Module):
             x = np.array(x, dtype=object)
             
         output = x
-        for module in self.supersayan_modules:
+        for module in self.modules_list:
             output = module(output)
             
         return output
-
-
-class HybridSupersayanModel(nn.Module):
-    """
-    A model that operates on a mix of encrypted and unencrypted data.
     
-    It converts specified layers of a PyTorch model to their Supersayan equivalents
-    and performs operations with encryption/decryption as needed.
-    """
-    def __init__(self, torch_model: nn.Module, fhe_module_names: List[str]):
+    def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Initialize a Hybrid Supersayan model from a PyTorch model.
-        
-        Args:
-            torch_model: The PyTorch model to convert
-            fhe_module_names: List of module names to execute in FHE
-            
-        Raises:
-            ValueError: If a module name in fhe_module_names doesn't exist in the model
-                        or if a layer to be executed in FHE doesn't have a Supersayan equivalent
-        """
-        super(HybridSupersayanModel, self).__init__()
-        self.original_model = torch_model
-        self.fhe_module_names = fhe_module_names
-        
-        # Validate that the specified module names exist in the model
-        all_module_names = dict(torch_model.named_modules())
-        for name in fhe_module_names:
-            if name not in all_module_names:
-                raise ValueError(f"Module '{name}' not found in the model. Available modules: {list(all_module_names.keys())}")
-        
-        # Convert modules selectively
-        self.modules_dict = nn.ModuleDict()
-        for name, module in torch_model.named_children():
-            if name in fhe_module_names:
-                # Convert to Supersayan module
-                try:
-                    supersayan_module = self._convert_module(module)
-                    self.modules_dict[name] = supersayan_module
-                except ValueError as e:
-                    raise ValueError(f"Failed to convert module '{name}' to Supersayan: {e}")
-            else:
-                # Keep as PyTorch module
-                self.modules_dict[name] = module
-    
-    def _convert_module(self, module: nn.Module) -> nn.Module:
-        """
-        Convert a PyTorch module to its Supersayan equivalent.
-        
-        Args:
-            module: The PyTorch module to convert
-            
-        Returns:
-            The converted Supersayan module
-            
-        Raises:
-            ValueError: If the module type doesn't have a Supersayan equivalent
-        """
-        module_type = type(module)
-        
-        if module_type in LAYER_MAPPING:
-            # Get the Supersayan equivalent class
-            supersayan_class = LAYER_MAPPING[module_type]
-            
-            if module_type == nn.Linear:
-                # Handle Linear layer specifically
-                supersayan_module = supersayan_class(
-                    in_features=module.in_features,
-                    out_features=module.out_features,
-                    bias=module.bias is not None
-                )
-                
-                # Copy weights and biases
-                supersayan_module.weight.data = module.weight.data.clone()
-                if module.bias is not None:
-                    supersayan_module.bias.data = module.bias.data.clone()
-                
-                return supersayan_module
-            
-            # Add handling for other layer types as they are implemented
-            
-        elif isinstance(module, nn.Sequential):
-            # Handle Sequential containers
-            supersayan_sequential = nn.Sequential()
-            for i, submodule in enumerate(module.children()):
-                supersayan_submodule = self._convert_module(submodule)
-                supersayan_sequential.add_module(str(i), supersayan_submodule)
-            return supersayan_sequential
-        
-        else:
-            raise ValueError(f"Module of type {module_type.__name__} not supported in Supersayan. Supported types: {list(LAYER_MAPPING.keys())}")
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass with automatic encryption/decryption for FHE modules.
+        Forward pass for hybrid model with automatic encryption/decryption for FHE modules.
         
         Args:
             x: Unencrypted input data (torch.Tensor)
@@ -218,12 +190,12 @@ class HybridSupersayanModel(nn.Module):
             if name in self.fhe_module_names:
                 # This module should run in FHE
                 # 1. Generate key
-                key = generate_secret_key()  # Use a standard key size
+                key = generate_secret_key()
                 
                 # 2. Encrypt input
                 encrypted_input = encrypt(output, key)
                 
-                # 3. Process with Supersayan module
+                # 3. Process with SuperSayan module
                 encrypted_output = self.modules_dict[name](encrypted_input)
                 
                 # 4. Decrypt output
@@ -235,29 +207,49 @@ class HybridSupersayanModel(nn.Module):
         return output
 
 
-def convert_to_pure_supersayan(torch_model: nn.Module) -> PureSupersayanModel:
+def convert_model(
+    torch_model: nn.Module, 
+    model_type: ModelType = ModelType.PURE,
+    fhe_module_names: Optional[List[str]] = None
+) -> SupersayanModel:
     """
-    Convert a PyTorch model to a Pure Supersayan model.
+    Convert a PyTorch model to a SuperSayan model.
+    
+    Args:
+        torch_model: The PyTorch model to convert
+        model_type: Whether to create a pure or hybrid model
+        fhe_module_names: List of module names to execute in FHE (required for hybrid mode)
+        
+    Returns:
+        A SuperSayan model configured according to the specified parameters
+    """
+    return SupersayanModel(torch_model, model_type, fhe_module_names)
+
+
+# Maintain backwards compatibility
+def convert_to_pure_supersayan(torch_model: nn.Module) -> SupersayanModel:
+    """
+    Convert a PyTorch model to a Pure SuperSayan model.
     
     Args:
         torch_model: The PyTorch model to convert
         
     Returns:
-        A Pure Supersayan model that takes encrypted inputs and produces encrypted outputs
+        A Pure SuperSayan model that takes encrypted inputs and produces encrypted outputs
     """
-    return PureSupersayanModel(torch_model)
+    return convert_model(torch_model, ModelType.PURE)
 
 
-def convert_to_hybrid_supersayan(torch_model: nn.Module, fhe_module_names: List[str]) -> HybridSupersayanModel:
+def convert_to_hybrid_supersayan(torch_model: nn.Module, fhe_module_names: List[str]) -> SupersayanModel:
     """
-    Convert a PyTorch model to a Hybrid Supersayan model.
+    Convert a PyTorch model to a Hybrid SuperSayan model.
     
     Args:
         torch_model: The PyTorch model to convert
         fhe_module_names: List of module names to execute in FHE
         
     Returns:
-        A Hybrid Supersayan model that takes unencrypted inputs, 
+        A Hybrid SuperSayan model that takes unencrypted inputs, 
         processes specified modules with encryption, and produces unencrypted outputs
     """
-    return HybridSupersayanModel(torch_model, fhe_module_names) 
+    return convert_model(torch_model, ModelType.HYBRID, fhe_module_names)

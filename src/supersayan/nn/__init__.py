@@ -10,13 +10,16 @@ from .layers import Linear
 from .convert import (
     convert_to_pure_supersayan,
     convert_to_hybrid_supersayan,
-    PureSupersayanModel,
-    HybridSupersayanModel,
+    convert_model,
+    SupersayanModel,
+    ModelType
 )
 
 __all__ = [
     "convert_to_pure_supersayan",
     "convert_to_hybrid_supersayan",
-    "PureSupersayanModel",
-    "HybridSupersayanModel",
+    "convert_model",
+    "SupersayanModel",
+    "ModelType",
+    "Linear"
 ]
