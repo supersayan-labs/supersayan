@@ -54,6 +54,10 @@ def test_conv2d_layer():
         logger.error(f"FHE convolution failed: {e}")
         raise
     
+    # Verify output has correct shape
+    expected_shape = (1, 4, 8, 8)  # Same spatial dimensions due to padding=1
+    assert decrypted_output.shape == expected_shape, f"Expected shape {expected_shape} but got {decrypted_output.shape}"
+    
     logger.info("Conv2d test completed successfully")
 
 def test_conv2d_with_stride():
@@ -90,6 +94,10 @@ def test_conv2d_with_stride():
     except Exception as e:
         logger.error(f"FHE strided convolution failed: {e}")
         raise
+    
+    # Verify output has correct shape with stride=2
+    expected_shape = (1, 4, 4, 4)  # Half size in each spatial dimension
+    assert decrypted_output.shape == expected_shape, f"Expected shape {expected_shape} but got {decrypted_output.shape}"
     
     logger.info("Strided Conv2d test completed successfully")
 

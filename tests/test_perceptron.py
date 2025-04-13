@@ -66,6 +66,10 @@ def test_perceptron_network():
         logger.error(f"FHE execution failed: {e}")
         raise
     
+    # Verify we have output with expected shape
+    expected_shape = (2, 2)  # Batch size 2, output features 2
+    assert decrypted_output.shape == expected_shape, f"Expected shape {expected_shape} but got {decrypted_output.shape}"
+    
     logger.info("Perceptron test completed successfully")
 
 if __name__ == '__main__':

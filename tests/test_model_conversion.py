@@ -52,7 +52,7 @@ def test_pure_model_conversion():
     print(f"Mean Absolute Difference: {mean_diff}")
     
     # FHE operations introduce noise, so use a larger threshold
-    return mean_diff < 1.0  # Allow for more difference due to encryption noise
+    assert mean_diff < 1.0, f"Mean difference {mean_diff} is too large for pure model"
 
 def test_hybrid_model_conversion():
     """Test converting a PyTorch model to a Hybrid SuperSayan model."""
@@ -90,7 +90,7 @@ def test_hybrid_model_conversion():
     print(f"Mean Absolute Difference: {mean_diff}")
     
     # FHE operations introduce noise, so use a larger threshold
-    return mean_diff < 1.0  # Allow for more difference due to encryption noise
+    assert mean_diff < 1.0, f"Mean difference {mean_diff} is too large for hybrid model"
 
 if __name__ == "__main__":
     print("Testing PyTorch to SuperSayan model conversion\n")

@@ -58,3 +58,12 @@ Coming soon: usage examples and tutorials for building privacy-preserving neural
 ### 🎯 Final Steps (Optional)
 
 - [ ] Add **GPU acceleration** support
+
+## Tests
+To run the tests, execute the following command:
+```bash
+python -m pytest tests/ -v
+```
+
+## Roadmap
+- Implement double hoisting for Conv2D as described in the Orion paper

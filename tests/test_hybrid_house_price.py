@@ -101,10 +101,9 @@ def test_hybrid_house_price_model():
     print(f"\nMean Absolute Difference: {mean_diff}")
     
     # FHE operations introduce noise, so use a larger threshold
-    result = mean_diff < 1000.0  # Larger threshold for house prices
-    print(f"Hybrid Model Test Passed: {result}")
+    assert mean_diff < 1000.0, f"Mean difference {mean_diff} is too large"
+    print(f"Hybrid Model Test Passed!")
     
-    return result
 
 if __name__ == "__main__":
     test_hybrid_house_price_model() 
