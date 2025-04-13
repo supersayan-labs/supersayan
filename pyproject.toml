@@ -25,3 +25,11 @@ classifiers = [
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["supersayan"]
+
+[tool.uv.sources]
+supersayan = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "supersayan",
+]

@@ -183,3 +183,6 @@ uv.lock
 
 # macOS Finder metadata
 .DS_Store
+
+# Claude & Cursor
+CLAUDE.md
