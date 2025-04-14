@@ -3,7 +3,11 @@
 """
 test_conv2d.py
 
-A test for a 2D convolutional layer using FHE operations
+A test for a 2D convolutional layer using FHE operations with Orion-style optimizations:
+1. Toeplitz-based encoding: Converting convolution to matrix-vector product
+2. Single-shot multiplexing: Handling stride > 1 in a single multiplicative depth
+3. BSGS (Baby-Step Giant-Step): Reduces rotations from O(n) to O(sqrt(n))
+4. Double-hoisting: Reuses expensive parts of key-switching across multiple rotations
 """
 
 import torch
@@ -11,7 +15,7 @@ import numpy as np
 import logging
 from supersayan.core.keygen import generate_secret_key
 from supersayan.core.encryption import encrypt, decrypt
-from supersayan.nn.layers.conv2d import Conv2d
+from supersayan.nn.layers.conv2d_orion import Conv2dOrion
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,7 +27,7 @@ def test_conv2d_layer():
     
     # Define FHE convolutional layer
     logger.info("Creating Conv2d layer...")
-    conv = Conv2d(in_channels=3, out_channels=4, kernel_size=3, stride=1, padding=1, bias=True)
+    conv = Conv2dOrion(in_channels=3, out_channels=4, kernel_size=3, stride=1, padding=1, bias=True)
     
     # Generate random input with batch size 1 and shape (1, 3, 8, 8)
     input_data = torch.randn(1, 3, 8, 8)
@@ -63,7 +67,7 @@ def test_conv2d_with_stride():
     
     # Define FHE convolutional layer with stride=2
     logger.info("Creating Conv2d layer with stride=2...")
-    conv = Conv2d(in_channels=3, out_channels=4, kernel_size=3, stride=2, padding=1, bias=True)
+    conv = Conv2dOrion(in_channels=3, out_channels=4, kernel_size=3, stride=2, padding=1, bias=True)
     
     # Generate random input with batch size 1 and shape (1, 3, 8, 8)
     input_data = torch.randn(1, 3, 8, 8)

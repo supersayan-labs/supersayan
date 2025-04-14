@@ -7,6 +7,7 @@ This subpackage provides:
 """
 
 from .linear import Linear
+from .conv2d_orion import Conv2dOrion
 from .conv2d import Conv2d
 
-__all__ = ["Linear", "Conv2d"]
+__all__ = ["Linear", "Conv2dOrion", "Conv2d"]
