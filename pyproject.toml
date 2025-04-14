@@ -27,9 +27,13 @@ classifiers = [
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["supersayan"]
+package-data = {"supersayan" = ["py.typed"]}
+
+[tool.uv]
+editable-packages = ["supersayan"]
 
 [tool.uv.sources]
-supersayan = { workspace = true }
+supersayan = { path = ".", editable = true }
 
 [dependency-groups]
 dev = [
