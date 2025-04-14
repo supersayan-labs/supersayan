@@ -4,6 +4,7 @@ Neural network layers implementing encrypted operations.
 This subpackage provides:
   - Linear: A fully-connected layer using homomorphic dot products.
   - Conv2d: A 2D convolutional layer using Toeplitz-based encoding and BSGS optimization.
+  - Conv2dOrion: A 2D convolutional layer using Orion's optimized encoding.
 """
 
 from .linear import Linear

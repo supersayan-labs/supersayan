@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Tuple, List, Optional, Union
+from typing import Tuple, List, Union
 import logging
 
 from supersayan.core.bindings import SupersayanTFHE
-from supersayan.core.types import LWE
 
 logger = logging.getLogger(__name__)
 

@@ -17,6 +17,9 @@ dependencies = [
     "julia",
     "pytest",
     "pytest-benchmark",
+    "uvicorn",
+    "fastapi",
+    "requests"
 ]
 
 classifiers = [

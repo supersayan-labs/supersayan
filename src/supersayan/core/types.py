@@ -48,5 +48,37 @@ class LWE:
         # Vectorized version for batch conversion
         return np.array([cls.from_julia(lwe) for lwe in julia_lwe_list], dtype=object)
     
+    def to_dict(self):
+        """
+        Convert the LWE object to a dictionary for serialization.
+        
+        Returns:
+            dict: A dictionary representation of the LWE object
+        """
+        return {
+            "mask": self.mask.tolist(),
+            "masked": self.masked,
+            "type": "LWE"
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """
+        Create an LWE instance from a dictionary.
+        
+        Args:
+            data: Dictionary with mask and masked values
+            
+        Returns:
+            LWE: A Python LWE instance
+        """
+        if data.get("type") != "LWE":
+            raise ValueError(f"Expected LWE type, got {data.get('type')}")
+        
+        return cls(
+            mask=data["mask"],
+            masked=data["masked"]
+        )
+    
     def __repr__(self):
         return f"LWE(mask_size={len(self.mask)}, masked={self.masked})"
