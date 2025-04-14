@@ -46,13 +46,8 @@ class Linear(nn.Module):
         weight_np = self.weight.detach().cpu().numpy()  # shape: (out_features, in_features)
         bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
         
-        # Flatten the input array to a 1D vector for Julia processing
-        flattened_input = []
-        for i in range(batch_size):
-            sample_input = input[i]
-            # Ensure sample_input is a list
-            sample_input_list = sample_input.tolist() if isinstance(sample_input, np.ndarray) else list(sample_input)
-            flattened_input.extend(sample_input_list)
+        # Flatten the input array to a 1D vector for Julia processing using vectorized operations
+        flattened_input = input.reshape(batch_size * self.in_features).tolist()
             
         # Call Julia implementation directly
         julia_result = SupersayanTFHE.Layers.Linear.linear_forward(
@@ -61,12 +56,8 @@ class Linear(nn.Module):
             bias_np
         )
         
-        # Reshape the result back to (batch_size, out_features)
-        result = np.empty((batch_size, self.out_features), dtype=object)
-        for i in range(batch_size):
-            for j in range(self.out_features):
-                idx = i * self.out_features + j
-                result[i, j] = julia_result[idx]
+        # Reshape the result back to (batch_size, out_features) using vectorized operations
+        result = np.array(julia_result, dtype=object).reshape(batch_size, self.out_features)
                 
         return result
     

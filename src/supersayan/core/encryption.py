@@ -57,11 +57,11 @@ def encrypt(mu: Union[float, torch.Tensor], key: List[float], sigma: Optional[fl
             logger.error(f"Julia encryption failed for tensor: {e}")
             raise RuntimeError(f"Encryption failed: {e}") from e
 
-        # Convert each Julia LWE object to Python LWE object
-        python_lwe_objects = [LWE.from_julia(lwe) for lwe in encrypted_flat]
+        # Convert Julia LWE objects to Python LWE objects using the batch conversion method
+        python_lwe_objects = LWE.from_julia_batch(encrypted_flat)
         
-        # Create a numpy array and reshape to original dimensions
-        encrypted_np_array = np.array(python_lwe_objects, dtype=object).reshape(original_shape)
+        # Reshape to original dimensions
+        encrypted_np_array = python_lwe_objects.reshape(original_shape)
         
         return encrypted_np_array
     

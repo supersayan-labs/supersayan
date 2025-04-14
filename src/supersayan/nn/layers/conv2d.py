@@ -120,13 +120,8 @@ class Conv2d(nn.Module):
             )
             self.precomputed = True
         
-        # Flatten input for Julia processing
-        flattened_input = []
-        for b in range(batch_size):
-            for c in range(channels):
-                for h in range(height):
-                    for w in range(width):
-                        flattened_input.append(input[b, c, h, w])
+        # Flatten input for Julia processing using vectorized operations
+        flattened_input = input.flatten().tolist()
         
         # Call Julia implementation directly
         julia_result = SupersayanTFHE.Layers.Conv2d.conv2d_forward(
@@ -136,15 +131,8 @@ class Conv2d(nn.Module):
             bias_np
         )
         
-        # Reshape the result back to (batch_size, out_channels, out_height, out_width)
-        output = np.empty((batch_size, self.out_channels, out_height, out_width), dtype=object)
-        idx = 0
-        for b in range(batch_size):
-            for c in range(self.out_channels):
-                for h in range(out_height):
-                    for w in range(out_width):
-                        output[b, c, h, w] = julia_result[idx]
-                        idx += 1
+        # Reshape the result back to (batch_size, out_channels, out_height, out_width) using vectorized operations
+        output = np.array(julia_result, dtype=object).reshape(batch_size, self.out_channels, out_height, out_width)
         
         return output
     
