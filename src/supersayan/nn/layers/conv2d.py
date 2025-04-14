@@ -3,9 +3,8 @@ import torch.nn as nn
 import numpy as np
 from typing import Tuple, List, Optional, Union
 import logging
-import math
 
-from supersayan.core.operations import add_lwe, dot_product_lwe
+from supersayan.core.bindings import SupersayanTFHE
 from supersayan.core.types import LWE
 
 logger = logging.getLogger(__name__)
@@ -85,97 +84,6 @@ class Conv2d(nn.Module):
         
         return (h_out, w_out)
     
-    def _unfold_input(self, input_shape: Tuple[int, int]) -> Tuple[List[int], List[int]]:
-        """
-        Compute the indices for unfolding the input to prepare for BSGS.
-        
-        Args:
-            input_shape: A tuple (height, width) of the input feature map.
-            
-        Returns:
-            A tuple of two lists containing the row and column indices to extract patches.
-        """
-        h_in, w_in = input_shape
-        k_h, k_w = self.kernel_size
-        s_h, s_w = self.stride
-        p_h, p_w = self.padding
-        d_h, d_w = self.dilation
-        
-        # Compute output dimensions
-        h_out, w_out = self._compute_output_shape(input_shape)
-        
-        # Generate all (row, col) indices for the output
-        row_indices = []
-        col_indices = []
-        
-        for i in range(h_out):
-            for j in range(w_out):
-                # For each output position, compute the corresponding input indices
-                for di in range(k_h):
-                    for dj in range(k_w):
-                        # Compute input positions with dilation
-                        in_i = i * s_h + di * d_h - p_h
-                        in_j = j * s_w + dj * d_w - p_w
-                        
-                        # Skip if the indices are outside the input boundaries
-                        if 0 <= in_i < h_in and 0 <= in_j < w_in:
-                            row_indices.append((i, j, di, dj))
-                            col_indices.append((in_i, in_j))
-        
-        return row_indices, col_indices
-    
-    def _build_toeplitz_matrices(self, input_shape: Tuple[int, int, int, int]):
-        """
-        Build the Toeplitz matrices for each output channel.
-        
-        This implements single-shot multiplexing for strided convolutions by constructing
-        special Toeplitz matrices that handle stride in one multiplicative depth.
-        
-        Args:
-            input_shape: A tuple (batch, channels, height, width) of the input.
-        """
-        _, _, h_in, w_in = input_shape
-        
-        # Get weights as numpy array
-        weight_np = self.weight.detach().cpu().numpy()
-        
-        # Compute output dimensions
-        h_out, w_out = self._compute_output_shape((h_in, w_in))
-        
-        # Compute indices for input unfolding
-        row_indices, col_indices = self._unfold_input((h_in, w_in))
-        
-        # For each output channel, create a Toeplitz matrix
-        toeplitz_matrices = []
-        
-        for out_c in range(self.out_channels):
-            # For grouped convolutions, we only use a subset of input channels
-            in_c_start = (out_c // (self.out_channels // self.groups)) * (self.in_channels // self.groups)
-            in_c_end = in_c_start + (self.in_channels // self.groups)
-            
-            # Create the Toeplitz matrix for this output channel
-            # Shape: (h_out * w_out, h_in * w_in * (in_channels // groups))
-            toeplitz_shape = (h_out * w_out, h_in * w_in * (self.in_channels // self.groups))
-            toeplitz = np.zeros(toeplitz_shape)
-            
-            # Fill the Toeplitz matrix based on the convolution parameters
-            for idx, ((i, j, di, dj), (in_i, in_j)) in enumerate(zip(row_indices, col_indices)):
-                out_idx = i * w_out + j
-                
-                # For each input channel in this group
-                for in_c_idx, in_c in enumerate(range(in_c_start, in_c_end)):
-                    in_idx = in_c_idx * (h_in * w_in) + in_i * w_in + in_j
-                    weight_idx = (in_c % (self.in_channels // self.groups), di, dj)
-                    toeplitz[out_idx, in_idx] = weight_np[out_c][weight_idx]
-            
-            # Apply BSGS optimization: Prepare for baby-step giant-step algorithm
-            # In a full implementation, we would restructure this for optimal rotation operations
-            # Here we just store the raw Toeplitz matrix for simplicity
-            toeplitz_matrices.append(toeplitz)
-            
-        self.toeplitz_matrices = toeplitz_matrices
-        self.precomputed = True
-    
     def forward(self, input: np.ndarray) -> np.ndarray:
         """
         Performs the forward pass using homomorphic operations.
@@ -194,56 +102,49 @@ class Conv2d(nn.Module):
         # Compute output dimensions
         out_height, out_width = self._compute_output_shape((height, width))
         
-        # Build Toeplitz matrices if not already done
-        if not self.precomputed or self.toeplitz_matrices is None:
-            self._build_toeplitz_matrices(input.shape)
-        
-        # Get bias values
+        # Detach the weight and bias parameters as plain numbers
+        weight_np = self.weight.detach().cpu().numpy()
         bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
         
-        # Prepare output array
-        output = np.empty((batch_size, self.out_channels, out_height, out_width), dtype=object)
+        # Build Toeplitz matrices if not already done
+        if not self.precomputed or self.toeplitz_matrices is None:
+            # Build toeplitz matrices using Julia backend
+            self.toeplitz_matrices = SupersayanTFHE.Layers.Conv2d.build_toeplitz_matrices(
+                input.shape,
+                weight_np,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.groups
+            )
+            self.precomputed = True
         
-        # For each sample in the batch
+        # Flatten input for Julia processing
+        flattened_input = []
         for b in range(batch_size):
-            # Reshape input to vector form for matrix multiplication
-            # This flattens the input for the Toeplitz matrix multiplication
-            input_sample = input[b]
-            input_vector = []
-            
-            # For grouped convolutions, organize the input by groups
-            for g in range(self.groups):
-                channels_per_group = self.in_channels // self.groups
-                group_channels = input_sample[g * channels_per_group:(g + 1) * channels_per_group]
-                
-                # Flatten each group to a vector
-                for c in range(channels_per_group):
-                    for h in range(height):
-                        for w in range(width):
-                            input_vector.append(group_channels[c][h][w])
-            
-            # For each output channel
-            for out_c in range(self.out_channels):
-                # Get the Toeplitz matrix for this channel
-                toeplitz = self.toeplitz_matrices[out_c]
-                
-                # Split output computation by rows (for BSGS-style optimization)
-                for i in range(out_height):
-                    for j in range(out_width):
-                        out_idx = i * out_width + j
-                        
-                        # Get the corresponding row of the Toeplitz matrix
-                        toeplitz_row = toeplitz[out_idx]
-                        
-                        # Compute dot product using homomorphic operations
-                        result = dot_product_lwe(input_vector, toeplitz_row.tolist())
-                        
-                        # Add bias if present
-                        if bias_np is not None:
-                            result = add_lwe(result, bias_np[out_c])
-                        
-                        # Store in output array
-                        output[b, out_c, i, j] = result
+            for c in range(channels):
+                for h in range(height):
+                    for w in range(width):
+                        flattened_input.append(input[b, c, h, w])
+        
+        # Call Julia implementation directly
+        julia_result = SupersayanTFHE.Layers.Conv2d.conv2d_forward(
+            flattened_input,
+            input.shape,
+            self.toeplitz_matrices,
+            bias_np
+        )
+        
+        # Reshape the result back to (batch_size, out_channels, out_height, out_width)
+        output = np.empty((batch_size, self.out_channels, out_height, out_width), dtype=object)
+        idx = 0
+        for b in range(batch_size):
+            for c in range(self.out_channels):
+                for h in range(out_height):
+                    for w in range(out_width):
+                        output[b, c, h, w] = julia_result[idx]
+                        idx += 1
         
         return output
     

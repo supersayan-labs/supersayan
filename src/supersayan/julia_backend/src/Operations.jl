@@ -32,7 +32,7 @@ end
 
 Adds a scalar rhs to each LWE ciphertext in the array lhs.
 """
-function add(lhs::Vector{T}, rhs::Float64) where T <: Union{LWE, PyObject}
+function add(lhs::Vector{T}, rhs::Real) where T <: Union{LWE, PyObject}
     # Convert PyObjects to LWE if needed
     lhs_lwes = isa(first(lhs), PyObject) ? convert_pyobjects_to_lwes(lhs) : lhs
     
@@ -49,7 +49,7 @@ end
 Adds a scalar rhs to a single LWE ciphertext lhs.
 Returns a single LWE ciphertext.
 """
-function add(lhs::T, rhs::Float64) where T <: Union{LWE, PyObject}
+function add(lhs::T, rhs::Real) where T <: Union{LWE, PyObject}
     # Convert PyObject to LWE if needed
     lhs_lwe = isa(lhs, PyObject) ? convert_pyobject_to_lwe(lhs) : lhs
     
@@ -63,7 +63,7 @@ end
 Multiplies each LWE ciphertext in lhs by the scalar.
 Returns an array of LWE ciphertexts.
 """
-function mult(lhs::Vector{T}, scalar::Float64) where T <: Union{LWE, PyObject}
+function mult(lhs::Vector{T}, scalar::Real) where T <: Union{LWE, PyObject}
     # Convert PyObjects to LWE if needed
     lhs_lwes = isa(first(lhs), PyObject) ? convert_pyobjects_to_lwes(lhs) : lhs
     
@@ -83,7 +83,7 @@ The accumulation starts from the provided zero_ciphertext.
 
 Returns an LWE ciphertext representing the dot product.
 """
-function dot_product(encrypted_vector::Vector{T}, plain_vector::Vector{Float64}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
+function dot_product(encrypted_vector::Vector{T}, plain_vector::AbstractVector{<:Real}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
     if length(encrypted_vector) != length(plain_vector)
         throw(ArgumentError("Vectors must have the same length"))
     end
