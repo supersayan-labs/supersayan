@@ -3,10 +3,8 @@ import torch.nn as nn
 import numpy as np
 from typing import Tuple, List, Optional, Union
 import logging
-import math
 
 from supersayan.core.operations import add_lwe, dot_product_lwe
-from supersayan.core.types import LWE
 
 logger = logging.getLogger(__name__)
 

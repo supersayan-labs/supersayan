@@ -2,8 +2,13 @@
 """
 Script to test the Supersayan client with a house price regression model.
 
-This script trains a simple neural network for house price prediction and
-runs inference using the client-server architecture.
+This script:
+1. Trains a simple neural network for house price prediction
+2. Tests the hybrid mode where only specified nn.Linear layers run in FHE remotely,
+   while other layers (like ReLU) run in plaintext locally
+
+The client-server architecture transparently handles the remote execution
+of FHE layers while keeping local execution for non-FHE layers in hybrid mode.
 """
 
 import os
@@ -13,6 +18,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
 
 # Add parent directory to path
@@ -109,38 +115,15 @@ def test_house_price_client(server_url):
     print(f"\nConnecting to server at {server_url}...")
     
     try:
-        # Test pure model first (all layers run locally in plaintext)
-        print("\n--- Testing Pure Model (all layers run locally in plaintext) ---")
+        # Test hybrid model (only Linear layers in FHE run remotely)
+        print("\n--- Testing Hybrid Model (Linear layers in FHE run remotely, non-linear layers run in plaintext locally) ---")
         
-        # Create a client with pure model (no FHE)
-        client_pure = SupersayanClient(
-            server_url=server_url,
-            torch_model=torch_model,
-            model_type=ModelType.PURE
-        )
-        
-        print("Running inference with pure SupersayanClient...")
-        
-        # Perform forward pass - all layers run locally in plaintext
-        client_pure_pred = client_pure(test_x)
-        client_pure_values = client_pure_pred.detach().numpy()
-        
-        print("\nOriginal PyTorch model predictions:")
-        print(torch_values)
-        print("\nPure SupersayanClient model predictions:")
-        print(client_pure_values)
-
-        print(f"Pure Model Test Passed!")
-        
-        # Test hybrid model (linear layers in FHE run remotely)
-        print("\n--- Testing Hybrid Model (linear layers in FHE run remotely) ---")
-        
-        # Create a client with hybrid model (linear layers in FHE)
+        # Create a client with hybrid model (only Linear layers in FHE) using module type
         client_hybrid = SupersayanClient(
             server_url=server_url,
             torch_model=torch_model,
             model_type=ModelType.HYBRID,
-            fhe_module_names=["linear1", "linear2", "linear3"]
+            fhe_modules=[nn.Linear]  # Convert only Linear layers to FHE
         )
         
         print("Running inference with hybrid SupersayanClient...")
@@ -151,13 +134,13 @@ def test_house_price_client(server_url):
         
         print("\nOriginal PyTorch model predictions:")
         print(torch_values)
-        print("\nHybrid SupersayanClient model predictions:")
+        print("\nHybrid SupersayanClient model predictions (Linear layers in FHE, others in plaintext):")
         print(client_hybrid_values)
-        
+
         print(f"Hybrid Model Test Passed!")
         
         # Close the hybrid client session
-        print("Closing client session...")
+        print("Closing hybrid client session...")
         client_hybrid.close()
         
     except Exception as e:

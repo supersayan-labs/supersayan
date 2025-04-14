@@ -6,7 +6,7 @@ This package provides:
   - Conversion utilities for PyTorch models to Supersayan models
 """
 
-from .layers import Linear
+from .layers import Linear, Conv2d
 from .convert import (
     convert_to_pure_supersayan,
     convert_to_hybrid_supersayan,
@@ -21,5 +21,6 @@ __all__ = [
     "convert_model",
     "SupersayanModel",
     "ModelType",
-    "Linear"
+    "Linear",
+    "Conv2d"
 ]

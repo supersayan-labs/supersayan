@@ -7,7 +7,7 @@ import uuid
 import pickle
 import base64
 import os
-from typing import List, Optional
+from typing import Dict, List, Optional, Tuple, Union, Any, Type
 
 from supersayan.core.encryption import encrypt, decrypt
 from supersayan.core.keygen import generate_secret_key
@@ -27,7 +27,7 @@ class SupersayanClient(SupersayanModel):
         server_url: str, 
         torch_model: nn.Module,
         model_type: ModelType = ModelType.PURE,
-        fhe_module_names: Optional[List[str]] = None,
+        fhe_modules: Optional[Union[List[str], List[Type[nn.Module]]]] = None,
         model_id: Optional[str] = None
     ):
         """
@@ -36,19 +36,21 @@ class SupersayanClient(SupersayanModel):
         Args:
             server_url: The URL of the SuperSayan server
             torch_model: The PyTorch model to convert
-            model_type: Whether to create a pure (plaintext) or hybrid (partial FHE) model
-            fhe_module_names: List of module names to execute in FHE (required for hybrid mode)
+            model_type: Whether to create a pure (all FHE) or hybrid (partial FHE) model
+            fhe_modules: Either a list of module names or module types to execute in FHE 
+                        (required for hybrid mode)
             model_id: Optional ID of a model already on the server
         
         Note:
-            Pure models run entirely in plaintext (no FHE, no remote execution).
-            For hybrid mode, specified layers run in FHE and are executed remotely.
+            Pure models run entirely in FHE (all layers executed remotely).
+            For hybrid mode, specified layers run in FHE and are executed remotely,
+            while other layers run in plaintext locally.
         """
         # Initialize the parent SupersayanModel
         super(SupersayanClient, self).__init__(
             torch_model=torch_model,
             model_type=model_type,
-            fhe_module_names=fhe_module_names
+            fhe_modules=fhe_modules
         )
         
         # Client-specific initialization
@@ -59,39 +61,41 @@ class SupersayanClient(SupersayanModel):
         self.uploaded = False
         self._closed = False  # Flag to track if session is closed
         
-        # Only hybrid models need remote execution
-        if model_type == ModelType.HYBRID:
-            # If model_id is provided, assume the model is already on the server
-            if model_id is not None:
-                self.uploaded = True
-                self._get_remote_layer_names()
+        # Both pure and hybrid models need remote execution
+        # If model_id is provided, assume the model is already on the server
+        if model_id is not None:
+            self.uploaded = True
+            self._get_remote_layer_names()
     
     def _upload_model_if_needed(self):
         """
-        Upload the FHE modules to the server if needed (hybrid mode only).
+        Upload the FHE modules to the server if needed.
         
         Returns:
             model_id: The ID of the model on the server
         """
-        # Pure models run locally, so no need to upload
-        if self.model_type == ModelType.PURE:
-            return None
-            
         if self.uploaded:
             return self.model_id
-        
+            
         # Save model to a temporary file
         import tempfile
         with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as f:
             temp_path = f.name
         
         try:
-            # For hybrid models, we only need to upload the FHE modules
-            # Create a model dict with just the FHE modules
-            remote_modules = nn.ModuleDict()
-            for name in self.fhe_module_names:
-                if name in self.modules_dict:
-                    remote_modules[name] = self.modules_dict[name]
+            if self.model_type == ModelType.PURE:
+                # For pure models, upload all modules
+                remote_modules = nn.ModuleDict()
+                for name in self.fhe_module_names:
+                    if name in self.modules_dict:
+                        remote_modules[name] = self.modules_dict[name]
+            else:
+                # For hybrid models, we only need to upload the FHE modules
+                # Create a model dict with just the FHE modules
+                remote_modules = nn.ModuleDict()
+                for name in self.fhe_module_names if hasattr(self, 'fhe_module_names') else []:
+                    if name in self.modules_dict:
+                        remote_modules[name] = self.modules_dict[name]
             
             # Save just the FHE modules
             torch.save(remote_modules, temp_path)
@@ -213,12 +217,9 @@ class SupersayanClient(SupersayanModel):
         
         return encrypted_output
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def _forward_pure(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass that handles both pure and hybrid modes.
-        
-        This method overrides the parent's forward method to handle remote execution
-        for hybrid models when needed.
+        Forward pass for pure model with all layers running remotely in FHE.
         
         Args:
             x: Input tensor
@@ -226,12 +227,27 @@ class SupersayanClient(SupersayanModel):
         Returns:
             Output tensor
         """
-        if self.model_type == ModelType.PURE:
-            # For pure models, use the parent's implementation which runs locally
-            return super()._forward_pure(x)
-        else:
-            # For hybrid models, use our remote execution implementation
-            return self._forward_hybrid(x)
+        # Ensure model is uploaded
+        self._upload_model_if_needed()
+        
+        # Process all layers remotely
+        output = x
+        
+        # Encrypt the input
+        encrypted_input = encrypt(output, self.secret_key)
+        
+        # Process all layers in sequence
+        for name in self.fhe_module_names:
+            encrypted_input = self._process_layer(name, encrypted_input)
+        
+        # Decrypt final output
+        output = torch.tensor(
+            decrypt(encrypted_input, self.secret_key),
+            dtype=x.dtype,
+            device=x.device
+        )
+        
+        return output
     
     def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
         """

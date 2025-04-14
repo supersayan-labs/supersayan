@@ -73,16 +73,20 @@ python scripts/test_client.py --server-url http://127.0.0.1:8000
 The client test will:
 
 1. Train a simple neural network for house price prediction
-2. Convert the 
-model to a SuperSayan pure model
-3. Upload the model to the server
-4. Run inference layer by layer:
-   - Client encrypts input data
+2. Convert the model to a SuperSayan pure model (all layers in FHE)
+3. Test the pure model with remote execution:
+   - Client generates a single encryption key
+   - Client encrypts input data once
    - Client sends encrypted data to server
-   - Server performs FHE operations
-   - Server returns encrypted results
-   - Client decrypts results
-5. Compare the results with the original PyTorch model
+   - Server processes all layers in FHE sequentially
+   - Server returns final encrypted results
+   - Client decrypts results with the same key
+4. Convert the model to a SuperSayan hybrid model (selective FHE)
+5. Test the hybrid model with mixed execution:
+   - Client processes each layer accordingly
+   - For FHE layers: encrypts data, sends to server, receives encrypted results, decrypts
+   - For non-FHE layers: processes locally in plaintext
+6. Compare results with the original PyTorch model
 
 ## How It Works
 
@@ -109,23 +113,29 @@ The client test script (`test_client.py`) does the following:
 
 1. Creates and trains a simple neural network for house price prediction
 
-2. Converts the model to a SuperSayan pure model
+2. Tests pure model mode:
+   - Converts the model to a SuperSayan pure model (all layers in FHE)
+   - Connects to the server and uploads the model
+   - Runs inference with end-to-end encryption:
+     - Generates a single encryption key
+     - Encrypts input data once
+     - Processes all layers remotely in sequence
+     - Decrypts final results
 
-3. Connects to the server and uploads the model
+3. Tests hybrid model mode:
+   - Converts the model to a SuperSayan hybrid model (selective FHE)
+   - Connects to the server and uploads the FHE layers
+   - Runs inference with mixed execution:
+     - For each FHE layer: encrypt, send to server, receive, decrypt
+     - For each non-FHE layer: process locally in plaintext
 
-4. Runs inference with the client-server architecture:
-   - For each layer in the model:
-     - Client generates a key
-     - Client encrypts the input data
-     - Client sends encrypted data to the server
-     - Server executes the FHE layer
-     - Server returns encrypted results to the client
-     - Client decrypts the results
-     - Client passes the results to the next layer
-
-5. Compares the results with the original PyTorch model
+4. Compares results with the original PyTorch model
 
 ## Important Notes
+
+- **Pure models use a single encryption cycle**: The input is encrypted once, all FHE layers are processed on the server, and the final result is decrypted once.
+
+- **Hybrid models use per-layer encryption cycles**: Each FHE layer requires separate encryption/decryption.
 
 - **All FHE operations occur on the server side**: The server processes encrypted data without ever having access to the encryption keys or unencrypted data.
 

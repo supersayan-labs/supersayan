@@ -15,7 +15,7 @@ The SuperSayan client-server architecture consists of:
 
 - **SupersayanClient inherits from SupersayanModel**: The client is a true extension of SupersayanModel, maintaining all its behavior while adding remote execution capabilities
 - **Transparent Remote Execution**: The client looks and behaves like a regular SupersayanModel
-- **Consistent Behavior**: In pure mode, all layers run locally in plaintext (no FHE); in hybrid mode, FHE layers run remotely while other layers run locally
+- **Two Execution Modes**: Pure mode (all layers in FHE) and hybrid mode (selective FHE)
 - **Data Security**: Data is always encrypted during transmission and server-side processing
 
 ### Workflow Example
@@ -28,12 +28,17 @@ Linear → ReLU → Linear
 The execution flow works as follows:
 
 1. In PURE mode:
-   - All layers run locally in plaintext (no FHE, no encryption, no remote execution)
-   - This is just standard PyTorch execution
+   - All layers are converted to FHE and run remotely on the server
+   - Client generates a single encryption key
+   - Client encrypts input data once
+   - All layers are processed sequentially on the server with encrypted data
+   - Server returns the final encrypted result
+   - Client decrypts the result with the same key
 
 2. In HYBRID mode:
-   - Linear layers are converted to FHE and run on the server
-   - For FHE layers: 
+   - Only specified layers are converted to FHE and run on the server
+   - For FHE layers (e.g., Linear layers): 
+     - Client generates a key for each FHE layer
      - Client encrypts input data
      - Client sends encrypted data to server
      - Server executes the FHE layer
@@ -52,7 +57,7 @@ The client is created just like a SupersayanModel, but with a server URL:
 from supersayan.remote.client import SupersayanClient
 from supersayan.nn.convert import ModelType
 
-# Create a client for pure model (no FHE, all layers run locally)
+# Create a client for pure model (all layers run in FHE remotely)
 client_pure = SupersayanClient(
     server_url="http://localhost:8000",
     torch_model=torch_model,
@@ -73,19 +78,25 @@ client_hybrid = SupersayanClient(
 The client is used just like any PyTorch module:
 
 ```python
-# For pure models: runs locally in plaintext (no FHE)
+# For pure models: runs all layers in FHE remotely
+# Automatically handles:
+# 1. Single encryption key generation
+# 2. One-time input encryption
+# 3. Complete remote execution in FHE
+# 4. Final result decryption
 output_pure = client_pure(input_tensor)
 
 # For hybrid models: FHE layers run remotely, others run locally
 # Automatically handles:
 # 1. FHE model upload (if needed)
-# 2. Input encryption (for FHE layers)
+# 2. Per-layer key generation and encryption (for FHE layers)
 # 3. Remote execution (for FHE layers)
 # 4. Local execution (for non-FHE layers)
-# 5. Result decryption
+# 5. Per-layer result decryption
 output_hybrid = client_hybrid(input_tensor)
 
-# Clean up when done (only needed for hybrid models)
+# Clean up when done
+client_pure.close()
 client_hybrid.close()
 ```
 
@@ -136,25 +147,36 @@ class MyModel(nn.Module):
 # Create model
 model = MyModel()
 
+# Create a pure client (all layers in FHE on server)
+client_pure = SupersayanClient(
+    server_url="http://localhost:8000",
+    torch_model=model,
+    model_type=ModelType.PURE
+)
+
+# Run inference - this happens with end-to-end encryption:
+# 1. Single encryption of input
+# 2. Sequential processing of all layers on server
+# 3. Single decryption of output
+output_pure = client_pure(input_data)
+
 # Create a hybrid client (linear layers in FHE on server, relu locally)
-client = SupersayanClient(
+client_hybrid = SupersayanClient(
     server_url="http://localhost:8000",
     torch_model=model,
     model_type=ModelType.HYBRID,
     fhe_module_names=["linear1", "linear2"]
 )
 
-# Generate input
-input_data = torch.randn(1, 10)
-
 # Run inference - this happens with distributed execution:
 # 1. linear1 runs remotely on encrypted data
 # 2. relu runs locally on decrypted data
 # 3. linear2 runs remotely on re-encrypted data
-output = client(input_data)
+output_hybrid = client_hybrid(input_data)
 
 # Clean up
-client.close()
+client_pure.close()
+client_hybrid.close()
 ```
 
 ## Testing

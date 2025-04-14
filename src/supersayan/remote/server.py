@@ -262,7 +262,7 @@ class SupersayanServer:
     """
     Server for hosting SuperSayan models and performing remote FHE inference.
     
-    Handles model management, layer execution, and client session management.
+    Handles model deployment, layer execution, and client session management.
     """
     def __init__(
         self, 
