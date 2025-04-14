@@ -14,7 +14,9 @@ requires-python = ">=3.9"
 dependencies = [
     "numpy",
     "torch",
-    "julia"
+    "julia",
+    "uvicorn",
+    "fastapi"
 ]
 
 classifiers = [
