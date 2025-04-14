@@ -1,14 +1,15 @@
 module Linear
 
 using PyCall
-import ...Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
-import ...Operations: add, mult, dot_product
+import ...SupersayanTFHE.Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
+import ...SupersayanTFHE.Operations: add, mult, dot_product
 using Base.Threads
 
 export linear_forward
 
 """
-    linear_forward(input::Vector{T}, weights::AbstractMatrix, bias::Union{AbstractVector, Nothing}=nothing) where T <: Union{LWE, PyObject}
+    linear_forward(input::Vector{T}, weights::AbstractMatrix, bias::Union{AbstractVector, Nothing}=nothing;
+                  model_id::String="default_model") where T <: Union{LWE, PyObject}
 
 Performs a linear transformation on an encrypted input (batch of LWE ciphertexts).
 Optimized with multithreading for batch and output neuron parallelization.
@@ -17,6 +18,7 @@ Args:
     input: A vector of LWE ciphertexts (or PyObjects) of length batch_size * in_features.
     weights: A matrix of weights with shape (out_features, in_features).
     bias: An optional vector of bias values with length out_features.
+    model_id: Optional identifier for caching, defaults to "default_model".
 
 Returns:
     A vector of LWE ciphertexts of length batch_size * out_features.

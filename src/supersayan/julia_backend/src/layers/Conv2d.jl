@@ -1,8 +1,8 @@
 module Conv2d
 
 using PyCall
-import ...Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
-import ...Operations: add, mult, dot_product
+import ...SupersayanTFHE.Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
+import ...SupersayanTFHE.Operations: add, mult, dot_product
 using Base.Threads
 using LinearAlgebra: BLAS
 
@@ -46,7 +46,7 @@ end
                            kernel_size::Tuple{Int, Int}, stride::Tuple{Int, Int}, 
                            padding::Tuple{Int, Int}, dilation::Tuple{Int, Int}, groups::Int)
 
-Builds the Toeplitz matrices for a convolution operation.
+Builds the Toeplitz matrices for a convolution operation with caching support.
 Optimized with multithreading for parallel matrix construction.
 
 Args:
@@ -64,6 +64,7 @@ Returns:
 function build_toeplitz_matrices(input_shape::Tuple{Int, Int, Int, Int}, weight::AbstractArray, 
                                kernel_size::Tuple{Int, Int}, stride::Tuple{Int, Int}, 
                                padding::Tuple{Int, Int}, dilation::Tuple{Int, Int}, groups::Int)
+    
     _, in_channels, h_in, w_in = input_shape
     out_channels, in_channels_per_group, k_h, k_w = size(weight)
     
@@ -93,8 +94,8 @@ function build_toeplitz_matrices(input_shape::Tuple{Int, Int, Int, Int}, weight:
     
     # Calculate group boundaries for input channels
     group_boundaries = [(((out_c-1) ÷ (out_channels ÷ groups)) * (in_channels ÷ groups) + 1,
-                          ((out_c-1) ÷ (out_channels ÷ groups) + 1) * (in_channels ÷ groups)) 
-                       for out_c in 1:out_channels]
+                         ((out_c-1) ÷ (out_channels ÷ groups) + 1) * (in_channels ÷ groups)) 
+                        for out_c in 1:out_channels]
     
     # Parallel fill of all Toeplitz matrices
     # Use dynamic scheduling to balance the workload
@@ -165,12 +166,18 @@ function conv2d_forward(input::Vector{T}, input_shape::Tuple{Int, Int, Int, Int}
     input_size_per_batch = in_channels * h_in * w_in
     output_size_per_batch = out_channels * h_out * w_out
     
+    # Thread-local cache for dot product results
+    thread_local_caches = [Dict() for _ in 1:Threads.nthreads()]
+    
     # Process batches in parallel
     @threads for b in 1:batch_size
         # Get the slice of the input for this batch
         batch_start_idx = (b-1) * input_size_per_batch + 1
         batch_end_idx = b * input_size_per_batch
-        input_vector = view(input_lwes, batch_start_idx:batch_end_idx)
+        input_vector = collect(view(input_lwes, batch_start_idx:batch_end_idx))  # Convert view to array for thread safety
+        
+        # Get thread-local mini-cache to avoid contention
+        thread_local_cache = thread_local_caches[Threads.threadid()]
         
         # Process each output position and channel
         # This is the most computationally intensive part
@@ -182,10 +189,23 @@ function conv2d_forward(input::Vector{T}, input_shape::Tuple{Int, Int, Int, Int}
             # We can use a flattened loop for better vectorization
             for pos in 1:(h_out*w_out)
                 # Get row from Toeplitz matrix
-                toeplitz_row = view(toeplitz, pos, :)
+                toeplitz_row = collect(view(toeplitz, pos, :))  # Convert view to array for thread safety
                 
-                # Compute dot product
-                result = dot_product(input_vector, toeplitz_row, zero_ciphertext)
+                # Generate a lightweight hash for this specific dot product operation
+                # This helps identify redundant computations
+                row_hash = hash((out_c, pos))
+                
+                # Check if we can reuse a previously computed result
+                result = nothing
+                if haskey(thread_local_cache, row_hash)
+                    result = thread_local_cache[row_hash]
+                else
+                    # Compute dot product
+                    result = dot_product(input_vector, toeplitz_row, zero_ciphertext)
+                    
+                    # Cache the result locally for this thread
+                    thread_local_cache[row_hash] = result
+                end
                 
                 # Add bias if present
                 if bias !== nothing

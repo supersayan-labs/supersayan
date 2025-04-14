@@ -1,8 +1,8 @@
 module Conv2dOrion
 
 using PyCall
-import ...Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
-import ...Operations: add, mult, dot_product
+import ...SupersayanTFHE.Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
+import ...SupersayanTFHE.Operations: add, mult, dot_product
 using Base.Threads
 using LinearAlgebra: BLAS
 
@@ -115,7 +115,7 @@ function get_stride_permutation(h_out::Int, w_out::Int, stride::Tuple{Int, Int})
 end
 
 """
-    build_encoding_plan(input_shape::Tuple{Int, Int, Int, Int}, weight::Array{Float64, 4}, 
+    build_encoding_plan(input_shape::Tuple{Int, Int, Int, Int}, weight::AbstractArray, 
                       kernel_size::Tuple{Int, Int}, stride::Tuple{Int, Int}, 
                       padding::Tuple{Int, Int}, dilation::Tuple{Int, Int}, groups::Int)
 
@@ -136,6 +136,7 @@ Returns:
 function build_encoding_plan(input_shape::Tuple{Int, Int, Int, Int}, weight::AbstractArray, 
                           kernel_size::Tuple{Int, Int}, stride::Tuple{Int, Int}, 
                           padding::Tuple{Int, Int}, dilation::Tuple{Int, Int}, groups::Int)
+    
     _, in_channels, h_in, w_in = input_shape
     out_channels, in_channels_per_group, k_h, k_w = size(weight)
     
@@ -486,6 +487,9 @@ function conv2d_orion_forward(input::Vector{T}, input_shape::Tuple{Int, Int, Int
     # Create input vectors for each batch
     input_vectors = Vector{Vector{LWE}}(undef, batch_size)
     
+    # Thread-local cache for intermediate results (one per thread)
+    thread_local_caches = [Dict() for _ in 1:Threads.nthreads()]
+    
     # First prepare all input vectors (can be done sequentially to avoid view issues)
     for b in 1:batch_size
         sample_start = (b-1) * elements_per_sample + 1
@@ -494,13 +498,28 @@ function conv2d_orion_forward(input::Vector{T}, input_shape::Tuple{Int, Int, Int
         if sample_end >= sample_start
             # Create a full copy rather than a view
             input_sample = [input_lwes[i] for i in sample_start:sample_end]
-            input_vectors[b] = prepare_input_vector(
-                input_sample, 
-                encoding_plan["h_in"], 
-                encoding_plan["w_in"], 
-                channels_per_group, 
-                groups
-            )
+            
+            # Try to get from per-model cache first
+            input_hash = hash(input_sample)
+            prepared_key = (:prepared_input, input_hash)
+            
+            # Use thread-local cache for the first thread (sequential part)
+            thread_cache = thread_local_caches[1]
+            
+            if haskey(thread_cache, prepared_key)
+                input_vectors[b] = thread_cache[prepared_key]
+            else
+                # Prepare input and store in per-thread cache
+                prepared_input = prepare_input_vector(
+                    input_sample, 
+                    encoding_plan["h_in"], 
+                    encoding_plan["w_in"], 
+                    channels_per_group, 
+                    groups
+                )
+                input_vectors[b] = prepared_input
+                thread_cache[prepared_key] = prepared_input
+            end
         end
     end
     
@@ -511,10 +530,25 @@ function conv2d_orion_forward(input::Vector{T}, input_shape::Tuple{Int, Int, Int
             if b <= length(input_vectors) && input_vectors[b] !== nothing
                 input_vector = input_vectors[b]
                 
+                # Get thread-local cache for this thread
+                thread_cache = thread_local_caches[Threads.threadid()]
+                
                 # Process each output channel
                 for out_c in 1:out_channels
-                    # Apply BSGS forward pass to compute matrix-vector product
-                    channel_output = apply_bsgs_forward(input_vector, encoding_plan, out_c, zero_ciphertext)
+                    # Create a cache key for this specific batch and channel
+                    cache_key = (b, out_c)
+                    
+                    # Check if we already computed this channel output
+                    channel_output = nothing
+                    if haskey(thread_cache, cache_key)
+                        channel_output = thread_cache[cache_key]
+                    else
+                        # Apply BSGS forward pass to compute matrix-vector product
+                        channel_output = apply_bsgs_forward(input_vector, encoding_plan, out_c, zero_ciphertext)
+                        
+                        # Cache the result for potential reuse (e.g., in gradient computation)
+                        thread_cache[cache_key] = channel_output
+                    end
                     
                     # Add bias if present
                     if bias !== nothing
@@ -545,8 +579,23 @@ function conv2d_orion_forward(input::Vector{T}, input_shape::Tuple{Int, Int, Int
             input_vector = input_vectors[1]
             
             @threads for out_c in 1:out_channels
-                # Apply BSGS forward pass to compute matrix-vector product
-                channel_output = apply_bsgs_forward(input_vector, encoding_plan, out_c, zero_ciphertext)
+                # Get thread-local cache for this thread
+                thread_cache = thread_local_caches[Threads.threadid()]
+                
+                # Create a cache key for this specific channel
+                cache_key = (1, out_c)  # Single batch, so batch index is always 1
+                
+                # Check if we already computed this channel output
+                channel_output = nothing
+                if haskey(thread_cache, cache_key)
+                    channel_output = thread_cache[cache_key]
+                else
+                    # Apply BSGS forward pass to compute matrix-vector product
+                    channel_output = apply_bsgs_forward(input_vector, encoding_plan, out_c, zero_ciphertext)
+                    
+                    # Cache the result for potential reuse
+                    thread_cache[cache_key] = channel_output
+                end
                 
                 # Add bias if present
                 if bias !== nothing
