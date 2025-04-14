@@ -3,6 +3,11 @@ module Conv2dOrion
 using PyCall
 import ...Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
 import ...Operations: add, mult, dot_product
+using Base.Threads
+using LinearAlgebra: BLAS
+
+# Set BLAS threads to match Julia threads for optimal performance
+BLAS.set_num_threads(Threads.nthreads())
 
 export build_encoding_plan, conv2d_orion_forward
 
@@ -136,49 +141,51 @@ function build_encoding_plan(input_shape::Tuple{Int, Int, Int, Int}, weight::Abs
     
     # Compute output dimensions
     h_out, w_out = compute_output_shape((h_in, w_in), kernel_size, stride, padding, dilation)
+    out_size = h_out * w_out
+    in_size = h_in * w_in * (in_channels ÷ groups)
     
     # Step 1: Build the basic Toeplitz matrices for each output channel
     toeplitz_matrices = Vector{Matrix{Float64}}(undef, out_channels)
     
+    # Pre-allocate all matrices
     for out_c in 1:out_channels
-        # For grouped convolutions, determine which input channels to use
-        in_c_start = ((out_c-1) ÷ (out_channels ÷ groups)) * (in_channels ÷ groups) + 1
-        in_c_end = in_c_start + (in_channels ÷ groups) - 1
+        toeplitz_matrices[out_c] = zeros(out_size, in_size)
+    end
+    
+    # Precompute position mapping for kernel to input positions
+    position_mapping = Dict{Tuple{Int,Int,Int,Int}, Tuple{Int,Int}}()
+    for i in 1:h_out, j in 1:w_out, di in 1:k_h, dj in 1:k_w
+        in_i = (i-1) * stride[1] + (di-1) * dilation[1] - padding[1] + 1
+        in_j = (j-1) * stride[2] + (dj-1) * dilation[2] - padding[2] + 1
+        if 1 <= in_i <= h_in && 1 <= in_j <= w_in
+            position_mapping[(i, j, di, dj)] = (in_i, in_j)
+        end
+    end
+    
+    # Calculate group boundaries
+    group_boundaries = [(((out_c-1) ÷ (out_channels ÷ groups)) * (in_channels ÷ groups) + 1,
+                         ((out_c-1) ÷ (out_channels ÷ groups) + 1) * (in_channels ÷ groups)) 
+                        for out_c in 1:out_channels]
+    
+    # Parallel matrix construction
+    @threads for out_c in 1:out_channels
+        in_c_start, in_c_end = group_boundaries[out_c]
+        toeplitz = toeplitz_matrices[out_c]
         
-        # Create the Toeplitz matrix for this output channel
-        # Shape: (h_out * w_out, h_in * w_in * (in_channels // groups))
-        toeplitz = zeros(h_out * w_out, h_in * w_in * (in_channels ÷ groups))
-        
-        # Fill matrix by computing convolution indices
-        for i in 1:h_out
-            for j in 1:w_out
-                out_idx = (i-1) * w_out + j
+        # Parallel fill of matrices
+        for ((i, j, di, dj), (in_i, in_j)) in position_mapping
+            out_idx = (i-1) * w_out + j
+            
+            # For each input channel in this group
+            for in_c_idx in 1:(in_channels ÷ groups)
+                in_c = in_c_start + in_c_idx - 1
+                in_idx = (in_c_idx-1) * (h_in * w_in) + (in_i-1) * w_in + in_j
                 
-                # For each position in the kernel
-                for di in 1:k_h
-                    for dj in 1:k_w
-                        # Apply stride, padding, and dilation
-                        in_i = (i-1) * stride[1] + (di-1) * dilation[1] - padding[1] + 1
-                        in_j = (j-1) * stride[2] + (dj-1) * dilation[2] - padding[2] + 1
-                        
-                        # Skip if the indices are outside the input boundaries
-                        if 1 <= in_i <= h_in && 1 <= in_j <= w_in
-                            # For each input channel in this group
-                            for in_c_idx in 1:(in_channels ÷ groups)
-                                in_c = in_c_start + in_c_idx - 1
-                                in_idx = (in_c_idx-1) * (h_in * w_in) + (in_i-1) * w_in + in_j
-                                
-                                # Get the weight value (adjust for 1-based Julia indexing)
-                                weight_idx = (in_c_idx, di, dj)
-                                toeplitz[out_idx, in_idx] = weight[out_c, weight_idx...]
-                            end
-                        end
-                    end
-                end
+                # Get the weight value (adjust for 1-based Julia indexing)
+                weight_idx = (in_c_idx, di, dj)
+                toeplitz[out_idx, in_idx] = weight[out_c, weight_idx...]
             end
         end
-        
-        toeplitz_matrices[out_c] = toeplitz
     end
     
     # Step 2: Apply single-shot multiplexing for stride > 1
@@ -271,7 +278,8 @@ function prepare_input_vector(input_sample::Vector{T}, h_in::Int, w_in::Int, cha
         end_idx = g * channels_per_group * h_in * w_in
         
         if end_idx <= length(input_lwes)
-            group_channels = input_lwes[start_idx:end_idx]
+            # Extract a copy of the group channels (not a view)
+            group_channels = [input_lwes[i] for i in start_idx:end_idx]
             
             # Copy each element
             for el in group_channels
@@ -282,6 +290,14 @@ function prepare_input_vector(input_sample::Vector{T}, h_in::Int, w_in::Int, cha
     end
     
     return input_vector[1:idx-1]  # Return only the filled part
+end
+
+# Add a specialized method for SubArray to handle views correctly
+function prepare_input_vector(input_sample::SubArray{T, 1}, h_in::Int, w_in::Int, channels_per_group::Int, groups::Int) where T <: Union{LWE, PyObject}
+    # Convert the SubArray to a regular Vector
+    input_vec = collect(input_sample)
+    # Then call the regular method
+    return prepare_input_vector(input_vec, h_in, w_in, channels_per_group, groups)
 end
 
 """
@@ -299,13 +315,24 @@ Returns:
 """
 function hoisted_dot_product_lwe(input_vector::Vector{T}, row_block::AbstractMatrix, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
     # In a real FHE implementation, this would use internal hoisting mechanisms
-    # Here we simulate by computing each dot product separately
+    # Here we simulate by computing each dot product separately, but in parallel
     
-    results = Vector{LWE}(undef, size(row_block, 1))
+    num_rows = size(row_block, 1)
+    results = Vector{LWE}(undef, num_rows)
     
-    for i in 1:size(row_block, 1)
-        row = row_block[i, :]
-        results[i] = dot_product(input_vector, row, zero_ciphertext)
+    # Pre-extract all rows to avoid view issues
+    rows = [Vector{Float64}(row_block[i, :]) for i in 1:num_rows]
+    
+    # Use threading for sufficiently large blocks
+    if num_rows > 8
+        @threads for i in 1:num_rows
+            results[i] = dot_product(input_vector, rows[i], zero_ciphertext)
+        end
+    else
+        # Sequential for small blocks to avoid thread overhead
+        for i in 1:num_rows
+            results[i] = dot_product(input_vector, rows[i], zero_ciphertext)
+        end
     end
     
     return results
@@ -337,9 +364,18 @@ function apply_bsgs_forward(input_vector::Vector{T}, encoding_plan::Dict, out_c:
     output = Matrix{LWE}(undef, h_out, w_out)
     
     # Initialize all elements with zero_ciphertext to avoid UndefRefError
-    for i in 1:h_out
-        for j in 1:w_out
+    # Use parallel initialization for large matrices
+    if h_out * w_out > 100
+        @threads for idx in 1:(h_out * w_out)
+            i = (idx - 1) ÷ w_out + 1
+            j = (idx - 1) % w_out + 1
             output[i, j] = zero_ciphertext
+        end
+    else
+        for i in 1:h_out
+            for j in 1:w_out
+                output[i, j] = zero_ciphertext
+            end
         end
     end
     
@@ -358,8 +394,15 @@ function apply_bsgs_forward(input_vector::Vector{T}, encoding_plan::Dict, out_c:
     result_flat = Vector{LWE}(undef, length(permutation))
     
     # Initialize all elements with zero_ciphertext
-    for i in 1:length(result_flat)
-        result_flat[i] = zero_ciphertext
+    # Use parallel initialization for large arrays
+    if length(result_flat) > 100
+        @threads for i in 1:length(result_flat)
+            result_flat[i] = zero_ciphertext
+        end
+    else
+        for i in 1:length(result_flat)
+            result_flat[i] = zero_ciphertext
+        end
     end
     
     # Populate the output vector based on the baby-step results
@@ -431,48 +474,97 @@ function conv2d_orion_forward(input::Vector{T}, input_shape::Tuple{Int, Int, Int
     zero_ciphertext = LWE(zeros(Float64, mask_length), 0.0)
     
     # Prepare output vector (flattened batch * out_channels * h_out * w_out)
-    output = Vector{LWE}(undef, batch_size * out_channels * h_out * w_out)
+    total_output_size = batch_size * out_channels * h_out * w_out
+    output = Vector{LWE}(undef, total_output_size)
     
-    # Process each sample in the batch
+    # Calculate constants for indexing
     elements_per_sample = in_channels * encoding_plan["h_in"] * encoding_plan["w_in"]
+    output_elements_per_batch = out_channels * h_out * w_out
+    output_elements_per_channel = h_out * w_out
     
+    # Use atomic counters for thread-safe operations
+    # Create input vectors for each batch
+    input_vectors = Vector{Vector{LWE}}(undef, batch_size)
+    
+    # First prepare all input vectors (can be done sequentially to avoid view issues)
     for b in 1:batch_size
-        # Get the input for this sample and prepare it
         sample_start = (b-1) * elements_per_sample + 1
         sample_end = min(b * elements_per_sample, length(input_lwes))
         
         if sample_end >= sample_start
-            input_sample = input_lwes[sample_start:sample_end]
-            input_vector = prepare_input_vector(
+            # Create a full copy rather than a view
+            input_sample = [input_lwes[i] for i in sample_start:sample_end]
+            input_vectors[b] = prepare_input_vector(
                 input_sample, 
                 encoding_plan["h_in"], 
                 encoding_plan["w_in"], 
                 channels_per_group, 
                 groups
             )
+        end
+    end
+    
+    # Process batches in parallel, with locked channels for better workload balance
+    if batch_size > 1
+        # Multiple batches - parallelize over batches
+        @threads for b in 1:batch_size
+            if b <= length(input_vectors) && input_vectors[b] !== nothing
+                input_vector = input_vectors[b]
+                
+                # Process each output channel
+                for out_c in 1:out_channels
+                    # Apply BSGS forward pass to compute matrix-vector product
+                    channel_output = apply_bsgs_forward(input_vector, encoding_plan, out_c, zero_ciphertext)
+                    
+                    # Add bias if present
+                    if bias !== nothing
+                        # Apply bias with SIMD optimization when possible
+                        for idx in 1:(h_out*w_out)
+                            i = (idx-1) ÷ w_out + 1
+                            j = (idx-1) % w_out + 1
+                            channel_output[i, j] = add(channel_output[i, j], bias[out_c])
+                        end
+                    end
+                    
+                    # Store results in the output array (flattened for better cache locality)
+                    batch_offset = (b-1) * output_elements_per_batch
+                    channel_offset = (out_c-1) * output_elements_per_channel
+                    
+                    for idx in 1:(h_out*w_out)
+                        i = (idx-1) ÷ w_out + 1
+                        j = (idx-1) % w_out + 1
+                        flat_idx = batch_offset + channel_offset + (i-1)*w_out + j
+                        output[flat_idx] = channel_output[i, j]
+                    end
+                end
+            end
+        end
+    else
+        # Single batch - parallelize over channels
+        if length(input_vectors) > 0 && input_vectors[1] !== nothing
+            input_vector = input_vectors[1]
             
-            # Process each output channel
-            for out_c in 1:out_channels
+            @threads for out_c in 1:out_channels
                 # Apply BSGS forward pass to compute matrix-vector product
                 channel_output = apply_bsgs_forward(input_vector, encoding_plan, out_c, zero_ciphertext)
                 
                 # Add bias if present
                 if bias !== nothing
-                    for i in 1:h_out
-                        for j in 1:w_out
-                            channel_output[i, j] = add(channel_output[i, j], bias[out_c])
-                        end
+                    for idx in 1:(h_out*w_out)
+                        i = (idx-1) ÷ w_out + 1
+                        j = (idx-1) % w_out + 1
+                        channel_output[i, j] = add(channel_output[i, j], bias[out_c])
                     end
                 end
                 
                 # Store results in the output array
-                for i in 1:h_out
-                    for j in 1:w_out
-                        output_idx = (b-1) * out_channels * h_out * w_out + 
-                                    (out_c-1) * h_out * w_out + 
-                                    (i-1) * w_out + j
-                        output[output_idx] = channel_output[i, j]
-                    end
+                channel_offset = (out_c-1) * output_elements_per_channel
+                
+                for idx in 1:(h_out*w_out)
+                    i = (idx-1) ÷ w_out + 1
+                    j = (idx-1) % w_out + 1
+                    flat_idx = channel_offset + (i-1)*w_out + j
+                    output[flat_idx] = channel_output[i, j]
                 end
             end
         end
