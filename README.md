@@ -1,6 +1,6 @@
 # 🚀 Supersayan
 
-**Supersayan** is a Python frontend for [Julia SupersayanTFHE](https://github.com/supersayan-org/SupersayanTFHE), enabling **Fully Homomorphic Encryption (FHE)** with a PyTorch-style API for neural networks.
+**Supersayan** is a comprehensive project that includes both a Python frontend and a Julia backend. The Python frontend provides a PyTorch-style API for neural networks, while the Julia backend, known as [Julia SupersayanTFHE](https://github.com/bonsainoodle/supersayan), enables **Fully Homomorphic Encryption (FHE)** capabilities. This allows for the integration of FHE into machine learning operations, ensuring the security and privacy of sensitive data.
 
 ---
 
