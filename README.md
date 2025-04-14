@@ -42,6 +42,19 @@ Coming soon: usage examples and tutorials for building privacy-preserving neural
 
 ---
 
+## 🚀 Benchmarks
+
+To run the benchmarks, execute the following command:
+```bash
+pytest benchmarks/ -v
+```
+After running the benchmarks, you can compare the results using:
+```bash
+pytest-benchmark compare last mysession
+```
+
+---
+
 ## 📅 Development Roadmap
 
 ### 🔜 Next Week
@@ -62,7 +75,7 @@ Coming soon: usage examples and tutorials for building privacy-preserving neural
 ## Tests
 To run the tests, execute the following command:
 ```bash
-python -m pytest tests/ -v
+pytest tests/ -v
 ```
 
 ## Roadmap
