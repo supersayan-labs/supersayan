@@ -35,13 +35,13 @@ The tests directory contains unit tests, integration tests, and verification tes
 
 ## How to Run the Tests
 
-SuperSayan uses Python's pytest. You can run the tests using the following commands:
+SuperSayan supports pytest framework, with pytest being the recommended option.
 
 ### Run All Tests
 
 ```bash
-# Using pytest (recommended for better output)
-pytest tests/
+# Using pytest (recommended)
+pytest tests/ -v
 ```
 
 ### Run a Specific Test File
@@ -54,10 +54,7 @@ pytest tests/test_verify_correctness.py -v
 ### Run a Specific Test Function
 
 ```bash
-# Using unittest
-python -m unittest tests.test_verify_correctness.test_verify_linear
-
-# Using pytest
+# Using pytest (recommended)
 pytest tests/test_verify_correctness.py::test_verify_linear
 ```
 
@@ -90,10 +87,9 @@ pytest tests/test_verify_correctness.py::test_verify_linear
 
 SuperSayan uses a combination of:
 
-1. **unittest**: Python's built-in testing framework, providing the basic structure for the tests.
-2. **pytest**: A more powerful testing framework that offers rich features and better output formatting.
-3. **logging**: Extensive logging is used throughout the tests to provide visibility into the test process.
-4. **Assertions and Tolerances**: Since FHE computations involve approximations, the tests use tolerance thresholds to determine if results are "close enough" to the non-encrypted versions.
+1. **pytest**: A more powerful testing framework that offers rich features and better output formatting.
+2. **logging**: Extensive logging is used throughout the tests to provide visibility into the test process.
+3. **Assertions and Tolerances**: Since FHE computations involve approximations, the tests use tolerance thresholds to determine if results are "close enough" to the non-encrypted versions.
 
 ### Key Testing Features
 
