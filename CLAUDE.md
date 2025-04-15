@@ -4,9 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Test Commands
 - Install: `pip install -e .`
-- Run tests: `python -m unittest discover tests`
-- Run single test: `python -m unittest tests/test_perceptron.py`
-- Run specific test function: `python -m unittest tests.test_perceptron.test_perceptron_network`
+- Run tests: `pytest tests -v`
+- Run benchmarks: `pytest benchmarks -v`
 
 ## Code Style Guidelines
 - **Imports**: Group imports (stdlib, third-party, local) with stdlib first
