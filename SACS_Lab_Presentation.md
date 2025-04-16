@@ -147,28 +147,15 @@ SuperSayan follows a hybrid architecture with three main components:
 - ✅ Conv2d standard implementation
 - ✅ Conv2dOrion implementation with Toeplitz optimization
 - ✅ Client-server architecture for distributed computation
-- ✅ Caching system for performance improvements
 
 ### In Development
 
 - 🔄 Double-hoisting technique for Conv2d
 - 🔄 Cache persistence improvements
-
-***
-
-## 🛣️ Future Roadmap
-
-### Short-term Goals
-
-- Sparse matrix support for performance gains
-- Improved serialization for client-server communication
-- Improved caching system
-
-### Long-term Vision
-
-- Support for privacy-preserving training (not just inference)
-- Model compression techniques for FHE
-- Integration with federated learning systems
+- 🔄 Caching system for performance improvements
+- 🔄 Sparse matrix support for performance gains
+- 🔄 Prune and ensemble benchmark
+- 🔄 GPU support
 
 ***
 
