@@ -20,7 +20,7 @@ SuperSayan is a Python library for privacy-preserving neural networks using Full
 - **Optimized FHE Operations**: Implementation of state-of-the-art FHE techniques including BSGS
 - **Client-Server Architecture**: Distributed computation with end-to-end encryption
 - **Hybrid Models**: Mix encrypted and unencrypted operations for optimal performance
-- **Orion Implementation**: Optimized convolutions based on the [Orion FHE paper](https://eprint.iacr.org/2023/1314)
+- **Orion Implementation**: Optimized convolutions based on the [Orion FHE paper](https://arxiv.org/pdf/2311.03470)
 
 ## 🧱 Prerequisites
 
@@ -46,7 +46,7 @@ To use SuperSayan, you'll need:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/supersayan.git
+git clone https://github.com/bonsainoodle/supersayan
 cd supersayan
 ```
 
@@ -163,9 +163,6 @@ SuperSayan includes comprehensive tests for verifying correctness and functional
 Run tests using:
 
 ```bash
-# Run all tests
-python -m unittest discover tests
-
 # Using pytest with verbose output
 pytest tests/ -v
 ```

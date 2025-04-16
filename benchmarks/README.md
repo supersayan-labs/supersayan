@@ -80,7 +80,7 @@ All benchmarks follow a consistent naming pattern:
 
 ## Optimization Techniques
 
-The Conv2dOrion implementation uses several key optimizations from the [Orion FHE paper](https://eprint.iacr.org/2023/1314):
+The Conv2dOrion implementation uses several key optimizations from the [Orion FHE paper](https://arxiv.org/pdf/2311.03470):
 
 1. **Toeplitz-based encoding**: Converting convolution to matrix-vector product
 2. **Single-shot multiplexing**: Handling stride > 1 in a single multiplicative depth
