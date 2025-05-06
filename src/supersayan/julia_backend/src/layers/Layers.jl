@@ -3,8 +3,7 @@ module Layers
 # Import submodules
 include("Linear.jl")
 include("Conv2d.jl")
-include("Conv2dOrion.jl")
 
-export Linear, Conv2d, Conv2dOrion
+export Linear, Conv2d
 
 end

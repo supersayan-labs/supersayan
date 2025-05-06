@@ -191,3 +191,5 @@ CLAUDE.md
 data/
 models/
 .benchmarks/
+
+**/.claude/settings.local.json

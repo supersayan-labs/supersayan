@@ -36,21 +36,15 @@ server = None
 
 # Request models
 class UploadModelRequest(BaseModel):
-    session_id: str
     model_data: str
 
 class InferenceRequest(BaseModel):
-    session_id: str
     encrypted_input: str
-
-class SessionRequest(BaseModel):
-    session_id: str
 
 # API routes
 @app.post("/models/upload")
 async def upload_model(request: UploadModelRequest):
     response = server.handle_upload_model(
-        request.session_id,
         request.model_data
     )
     
@@ -74,23 +68,18 @@ async def get_model_structure(model_id: str):
 
 @app.post("/inference/{model_id}/{layer_name}")
 async def inference(model_id: str, layer_name: str, request: InferenceRequest):
+    # Debug print for encrypted input
+    print("\nEncrypted Server Input Debug Info:")
+    print(f"Type: {type(request.encrypted_input)}")
+    print(f"Length: {len(request.encrypted_input)}")
+    print(f"Sample (first 100 chars): {request.encrypted_input[:100]}...")
+    print(f"Is Base64: {all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=' for c in request.encrypted_input)}")
+    
     response = server.handle_inference(
-        request.session_id,
         model_id,
         layer_name,
         request.encrypted_input
     )
-    
-    if isinstance(response, tuple):
-        response_data, status_code = response
-        if status_code != 200:
-            raise HTTPException(status_code=status_code, detail=response_data["error"])
-        return response_data
-    return response
-
-@app.post("/sessions/{session_id}/close")
-async def close_session(session_id: str, request: SessionRequest):
-    response = server.handle_close_session(request.session_id)
     
     if isinstance(response, tuple):
         response_data, status_code = response

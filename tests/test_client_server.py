@@ -212,7 +212,6 @@ def test_hybrid_house_price_regression(server_fixture):
     client_hybrid = SupersayanClient(
         server_url=server_url,
         torch_model=torch_model,
-        model_type=ModelType.HYBRID,
         fhe_modules=[nn.Linear]  # Convert only Linear layers to FHE
     )
     
@@ -237,13 +236,6 @@ def test_hybrid_house_price_regression(server_fixture):
     except Exception as e:
         logger.error(f"Error during client test: {e}", exc_info=True)
         raise
-    finally:
-        # Always close the client session
-        try:
-            client_hybrid.close()
-            logger.info("Closed client session")
-        except Exception as e:
-            logger.warning(f"Error closing client session: {e}")
 
 
 def test_hybrid_small_cnn(server_fixture):
@@ -297,7 +289,6 @@ def test_hybrid_small_cnn(server_fixture):
     client_hybrid = SupersayanClient(
         server_url=server_url,
         torch_model=torch_model,
-        model_type=ModelType.HYBRID,
         fhe_modules=[nn.Conv2d]  # Convert only Conv2d layers to FHE
     )
     
@@ -322,14 +313,6 @@ def test_hybrid_small_cnn(server_fixture):
     except Exception as e:
         logger.error(f"Error during CNN client test: {e}", exc_info=True)
         raise
-    finally:
-        # Always close the client session
-        try:
-            client_hybrid.close()
-            logger.info("Closed CNN client session")
-        except Exception as e:
-            logger.warning(f"Error closing CNN client session: {e}")
-
 
 def test_resnet18_random_input(server_fixture):
     """
@@ -366,7 +349,6 @@ def test_resnet18_random_input(server_fixture):
     client_hybrid = SupersayanClient(
         server_url=server_url,
         torch_model=torch_model,
-        model_type=ModelType.HYBRID,
         fhe_modules=[nn.Conv2d, nn.Linear]  # Convert Conv2d and Linear layers to FHE
     )
     
@@ -393,13 +375,6 @@ def test_resnet18_random_input(server_fixture):
     except Exception as e:
         logger.error(f"Error during ResNet18 client test: {e}", exc_info=True)
         raise
-    finally:
-        # Always close the client session
-        try:
-            client_hybrid.close()
-            logger.info("Closed ResNet18 client session")
-        except Exception as e:
-            logger.warning(f"Error closing ResNet18 client session: {e}")
 
 
 if __name__ == "__main__":

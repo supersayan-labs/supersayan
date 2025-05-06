@@ -1,12 +1,138 @@
 import numpy as np
-from typing import List, Union
+from typing import Dict, Any, Protocol, Union, List, Type, TypeVar, Generic, Tuple, runtime_checkable
 import sys
 
-class LWE:
-    """
-    Python representation of the Julia LWE struct.
+@runtime_checkable
+class Serializable(Protocol):
+    """Protocol for objects that can be serialized to/from dictionaries."""
     
-    An LWE ciphertext consists of a mask (a vector of Float64) and a masked value (Float64).
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the object to a serializable dictionary."""
+        ...
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'Serializable':
+        """Create an object from a dictionary representation."""
+        ...
+
+
+T = TypeVar('T')
+
+class SerializableArray(Serializable, Generic[T]):
+    """
+    A wrapper for numpy arrays that makes them serializable.
+    
+    This class handles the serialization of numpy arrays, including
+    arrays of Serializable objects like LWE.
+    """
+    def __init__(self, array: np.ndarray, element_type: Type[T] = None):
+        """
+        Initialize a SerializableArray.
+        
+        Args:
+            array: The numpy array to wrap
+            element_type: Optional type of the elements in the array
+        """
+        self.array = array
+        self.element_type = element_type
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert the array to a serializable dictionary.
+        
+        Returns:
+            dict: A dictionary representation of the array
+        """
+        # Handle array of Serializable objects
+        if self.array.dtype == object and isinstance(self.array.flatten()[0], Serializable):
+            # Convert each Serializable object to a dict
+            items = [item.to_dict() for item in self.array.flatten()]
+            return {
+                "data": items,
+                "shape": self.array.shape,
+                "type": "array_of_objects"
+            }
+        # Handle regular numpy arrays
+        else:
+            return {
+                "data": self.array.tolist(),
+                "shape": self.array.shape,
+                "type": "array"
+            }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'SerializableArray':
+        """
+        Create a SerializableArray from a dictionary representation.
+        
+        Args:
+            data: Dictionary representation of the array
+            
+        Returns:
+            SerializableArray: A SerializableArray containing the deserialized data
+        """
+        if data.get("type") not in ["array", "array_of_objects"]:
+            raise ValueError(f"Expected array or array_of_objects type, got {data.get('type')}")
+        
+        shape = tuple(data.get("shape", (len(data["data"]),)))
+        
+        if data.get("type") == "array_of_objects":
+            # If we're deserializing objects, we need to know their type
+            # First element should indicate the type through its "type" field
+            if not data["data"]:  # Empty array
+                return cls(np.array([], dtype=object).reshape(shape))
+                
+            first_item = data["data"][0]
+            item_type = first_item.get("type")
+            
+            if item_type == "LWE":
+                # Convert each dict to an LWE object
+                from supersayan.core.types import LWE  # Local import to avoid circular reference
+                items = [LWE.from_dict(item) for item in data["data"]]
+                return cls(np.array(items, dtype=object).reshape(shape), LWE)
+            else:
+                # Unknown object type, just use the data as is
+                return cls(np.array(data["data"], dtype=object).reshape(shape))
+        else:
+            # Regular array
+            return cls(np.array(data["data"]).reshape(shape))
+    
+    def __array__(self) -> np.ndarray:
+        """
+        Return the underlying numpy array.
+        This allows the SerializableArray to be used as a numpy array.
+        """
+        return self.array
+    
+    def __getattr__(self, name):
+        """
+        Delegate attribute access to the underlying numpy array.
+        """
+        if name.startswith('__') and name.endswith('__'):
+            return super().__getattr__(name)
+        return getattr(self.array, name)
+    
+    def __getitem__(self, idx):
+        """
+        Support numpy-style indexing.
+        """
+        return self.array[idx]
+    
+    def __setitem__(self, idx, value):
+        """
+        Support numpy-style item assignment.
+        """
+        self.array[idx] = value
+    
+    def __repr__(self):
+        return f"SerializableArray(shape={self.array.shape}, element_type={self.element_type})"
+
+
+class LWE(Serializable):
+    """
+    Python representation of an LWE ciphertext.
+    
+    An LWE ciphertext consists of a mask (vector of Float64) and a masked value (Float64).
     """
     def __init__(self, mask: Union[List[float], np.ndarray], masked: float):
         """
@@ -34,22 +160,8 @@ class LWE:
             mask=np.array(julia_lwe.mask, dtype=np.float64),
             masked=float(julia_lwe.masked)
         )
-        
-    @classmethod
-    def from_julia_batch(cls, julia_lwe_list):
-        """
-        Efficiently convert a batch of Julia LWE objects to Python LWE instances.
-        
-        Args:
-            julia_lwe_list: List of Julia LWE objects
-            
-        Returns:
-            np.ndarray: A numpy array of Python LWE instances
-        """
-        # Vectorized version for batch conversion
-        return np.array([cls.from_julia(lwe) for lwe in julia_lwe_list], dtype=object)
     
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """
         Convert the LWE object to a dictionary for serialization.
         
@@ -63,7 +175,7 @@ class LWE:
         }
     
     @classmethod
-    def from_dict(cls, data):
+    def from_dict(cls, data: Dict[str, Any]) -> 'LWE':
         """
         Create an LWE instance from a dictionary.
         

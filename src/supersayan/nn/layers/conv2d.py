@@ -12,10 +12,6 @@ class Conv2d(nn.Module):
     """
     A PyTorch-style Conv2d layer redefined for encrypted data.
     
-    This implementation follows the Orion approach using Toeplitz-based encoding,
-    single-shot multiplexing, and optimizations based on the BSGS (Baby-Step Giant-Step)
-    algorithm for FHE operations.
-    
     The forward pass expects a NumPy array of LWE ciphertexts of shape (batch, channels, height, width).
     """
     def __init__(

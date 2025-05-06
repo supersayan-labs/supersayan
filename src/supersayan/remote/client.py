@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple, Union, Any, Type
 from supersayan.core.encryption import encrypt, decrypt
 from supersayan.core.keygen import generate_secret_key
 from supersayan.nn.convert import SupersayanModel, ModelType
+from .serialization import serialize_data, deserialize_data
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,6 @@ class SupersayanClient(SupersayanModel):
         self, 
         server_url: str, 
         torch_model: nn.Module,
-        model_type: ModelType = ModelType.PURE,
         fhe_modules: Optional[Union[List[str], List[Type[nn.Module]]]] = None,
         model_id: Optional[str] = None
     ):
@@ -49,17 +49,15 @@ class SupersayanClient(SupersayanModel):
         # Initialize the parent SupersayanModel
         super(SupersayanClient, self).__init__(
             torch_model=torch_model,
-            model_type=model_type,
+            model_type=ModelType.HYBRID,
             fhe_modules=fhe_modules
         )
         
         # Client-specific initialization
         self.server_url = server_url.rstrip('/')
-        self.session_id = str(uuid.uuid4())
         self.secret_key = generate_secret_key()
         self.model_id = model_id
         self.uploaded = False
-        self._closed = False  # Flag to track if session is closed
         
         # Both pure and hybrid models need remote execution
         # If model_id is provided, assume the model is already on the server
@@ -83,19 +81,13 @@ class SupersayanClient(SupersayanModel):
             temp_path = f.name
         
         try:
-            if self.model_type == ModelType.PURE:
-                # For pure models, upload all modules
-                remote_modules = nn.ModuleDict()
-                for name in self.fhe_module_names:
-                    if name in self.modules_dict:
-                        remote_modules[name] = self.modules_dict[name]
-            else:
-                # For hybrid models, we only need to upload the FHE modules
-                # Create a model dict with just the FHE modules
-                remote_modules = nn.ModuleDict()
-                for name in self.fhe_module_names if hasattr(self, 'fhe_module_names') else []:
-                    if name in self.modules_dict:
-                        remote_modules[name] = self.modules_dict[name]
+            remote_modules = nn.ModuleDict(
+                {
+                    name: self.modules_dict[name]
+                    for name in self.fhe_module_names
+                    if name in self.modules_dict
+                }
+            )
             
             # Save just the FHE modules
             torch.save(remote_modules, temp_path)
@@ -109,7 +101,6 @@ class SupersayanClient(SupersayanModel):
             response = requests.post(
                 f"{self.server_url}/models/upload",
                 json={
-                    "session_id": self.session_id,
                     "model_data": encoded_model
                 }
             )
@@ -158,16 +149,27 @@ class SupersayanClient(SupersayanModel):
         """
         # Ensure model is uploaded
         self._upload_model_if_needed()
+
+        logger.debug(f"Processing layer: {layer_name}")
+ 
+        # Debug info for input
+        logger.debug(f"Input type: {type(encrypted_input)}")
+        if hasattr(encrypted_input, 'shape'):
+            logger.debug(f"Input shape: {encrypted_input.shape}")
+        elif hasattr(encrypted_input, '__len__'):
+            logger.debug(f"Input length: {len(encrypted_input)}")
         
-        # Serialize the encrypted input
-        serialized_input = pickle.dumps(encrypted_input)
-        encoded_input = base64.b64encode(serialized_input).decode('utf-8')
+        # Serialize the encrypted input using the utility
+        try:
+            encoded_input = serialize_data(encrypted_input)
+        except Exception as e:
+            logger.exception(f"Serialization error: {e}")
+            raise ValueError(f"Failed to serialize input: {e}")
         
         # Send to server
         response = requests.post(
             f"{self.server_url}/inference/{self.model_id}/{layer_name}",
             json={
-                "session_id": self.session_id,
                 "encrypted_input": encoded_input
             }
         )
@@ -175,79 +177,23 @@ class SupersayanClient(SupersayanModel):
         if response.status_code != 200:
             raise ValueError(f"Layer processing failed: {response.text}")
         
-        # Deserialize the result
-        result = response.json()
-        decoded_output = base64.b64decode(result["encrypted_output"])
-        data = pickle.loads(decoded_output)
-        
-        # Handle different serialized formats
-        from supersayan.core.types import LWE
-        
-        if isinstance(data, dict) and "type" in data and "data" in data:
-            if data["type"] == "LWE":
-                # Single LWE object
-                encrypted_output = LWE.from_dict(data)
-            elif data["type"] == "lwe_array":
-                # Array of LWE objects
-                flat_lwes = []
-                for lwe_dict in data["data"]:
-                    if lwe_dict.get("type") == "LWE":
-                        flat_lwes.append(LWE.from_dict(lwe_dict))
-                    else:
-                        logger.warning(f"Unexpected object type in LWE array: {lwe_dict.get('type')}")
-                        flat_lwes.append(None)  # Placeholder for invalid data
-                
-                # Reshape according to original dimensions
-                shape = tuple(data.get("shape", (len(flat_lwes),)))
-                encrypted_output = np.array(flat_lwes, dtype=object).reshape(shape)
-            elif data["type"] == "array":
-                # Plain array
-                encrypted_output = np.array(data["data"])
-            elif data["type"] == "error":
-                # Error occurred during serialization on server
-                logger.error(f"Server serialization error: {data.get('error')}")
-                raise ValueError(f"Failed to deserialize server response: {data.get('error')}")
-            else:
-                # Unknown format
-                logger.warning(f"Unknown data format received: {data['type']}")
-                encrypted_output = data
-        else:
-            # Not a special format, use as-is
-            encrypted_output = data
-        
-        return encrypted_output
-    
-    def _forward_pure(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass for pure model with all layers running remotely in FHE.
-        
-        Args:
-            x: Input tensor
+        # Deserialize the result using the utility
+        try:
+            result = response.json()
+            encrypted_output = deserialize_data(result["encrypted_output"])
             
-        Returns:
-            Output tensor
-        """
-        # Ensure model is uploaded
-        self._upload_model_if_needed()
-        
-        # Process all layers remotely
-        output = x
-        
-        # Encrypt the input
-        encrypted_input = encrypt(output, self.secret_key)
-        
-        # Process all layers in sequence
-        for name in self.fhe_module_names:
-            encrypted_input = self._process_layer(name, encrypted_input)
-        
-        # Decrypt final output
-        output = torch.tensor(
-            decrypt(encrypted_input, self.secret_key),
-            dtype=x.dtype,
-            device=x.device
-        )
-        
-        return output
+            # Debug info for output
+            logger.debug(f"Output received for layer: {layer_name}")
+            logger.debug(f"Output type: {type(encrypted_output)}")
+            if hasattr(encrypted_output, 'shape'):
+                logger.debug(f"Output shape: {encrypted_output.shape}")
+            elif hasattr(encrypted_output, '__len__'):
+                logger.debug(f"Output length: {len(encrypted_output)}")
+                
+            return encrypted_output
+        except Exception as e:
+            logger.exception(f"Deserialization error: {e}")
+            raise ValueError(f"Failed to deserialize output: {e}")
     
     def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -286,33 +232,3 @@ class SupersayanClient(SupersayanModel):
                 output = self.modules_dict[name](output)
         
         return output
-    
-    def close(self):
-        """
-        Clean up resources and end the session.
-        Only needed for hybrid models that use remote execution.
-        """
-        if self.model_type == ModelType.HYBRID and self.model_id is not None:
-            # Set flag to avoid duplicate closing in __del__
-            self._closed = True
-            
-            requests.post(
-                f"{self.server_url}/sessions/{self.session_id}/close",
-                json={"session_id": self.session_id}
-            )
-            logger.info(f"Closed session {self.session_id}")
-    
-    def __del__(self):
-        """
-        Cleanup on object destruction.
-        
-        Note: This method should only be used as a fallback.
-        Applications should explicitly call close() when done.
-        """
-        # Only close if session wasn't already explicitly closed
-        # Add a _closed flag to track this state
-        if not hasattr(self, '_closed') or not self._closed:
-            try:
-                self.close()
-            except:
-                pass
