@@ -96,6 +96,13 @@ class ModelStore:
         
         # Cache the model in memory
         self.models[model_id] = model
+
+        # Print model layers and structure
+        logger.info(f"Model {model_id} structure:")
+        for name, module in model.named_modules():
+            prefix = "  " * len(name.split("."))
+            logger.info(f"{prefix}{name}: {module.__class__.__name__}")
+
         return {"model": model}
     
     def delete_model(self, model_id: str) -> bool:
@@ -162,7 +169,7 @@ class SupersayanServer:
         # Save the model
         try:
             model_id = self.model_store.save_model(model_data)
-            return {"model_id": model_id}
+            return {"model_id": model_id}, 200
         except Exception as e:
             return {"error": f"Failed to save model: {e}"}, 500
     
@@ -189,7 +196,7 @@ class SupersayanServer:
                 "structure": {
                     "layer_order": layer_order
                 }
-            }
+            }, 200
         except ValueError as e:
             return {"error": str(e)}, 404
         except Exception as e:
@@ -223,7 +230,6 @@ class SupersayanServer:
             elif hasattr(encrypted_input, '__len__'):
                 logger.debug(f"Input length: {len(encrypted_input)}")
             
-            # Execute layer
             if not hasattr(model, layer_name):
                 return {"error": f"Layer {layer_name} not found in model"}, 404
             
@@ -241,7 +247,7 @@ class SupersayanServer:
             try:
                 # Serialize the output using the serialization utility
                 encrypted_output_base64 = serialize_data(encrypted_output)
-                return {"encrypted_output": encrypted_output_base64}
+                return {"encrypted_output": encrypted_output_base64}, 200
             except Exception as e:
                 logger.exception(f"Serialization error: {e}")
                 return {"error": f"Failed to serialize output: {e}"}, 500

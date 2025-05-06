@@ -20,7 +20,9 @@ dependencies = [
     "uvicorn",
     "fastapi",
     "requests",
-    "torchvision"
+    "torchvision",
+    "websocket-client>=1.8.0",
+    "torchsummary>=1.5.1",
 ]
 
 classifiers = [

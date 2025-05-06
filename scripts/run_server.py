@@ -2,7 +2,7 @@
 """
 Script to run a Supersayan server.
 
-This script starts a FastAPI server that provides endpoints for uploading models,
+This script starts a Socket.IO server that provides endpoints for uploading models,
 retrieving model structure, and performing inference with FHE layers.
 """
 
@@ -10,9 +10,8 @@ import os
 import sys
 import logging
 import argparse
+import socketio
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
 from typing import Dict, Any
 
 # Add parent directory to path
@@ -28,69 +27,76 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Create FastAPI app
-app = FastAPI(title="Supersayan FHE Server")
+# Create Socket.IO server with longer timeout
+sio = socketio.AsyncServer(
+    async_mode='asgi',
+    ping_timeout=120,  # Increased from 60 to 120 seconds
+    ping_interval=25,
+    cors_allowed_origins='*',
+    max_http_buffer_size=10_000_000_000 # 5GB buffer for large data
+)
+app = socketio.ASGIApp(sio)
 
 # Initialize server
 server = None
 
-# Request models
-class UploadModelRequest(BaseModel):
-    model_data: str
+# Socket.IO event handlers
+@sio.event
+async def connect(sid, environ):
+    logger.info(f"Client connected: {sid}")
 
-class InferenceRequest(BaseModel):
-    encrypted_input: str
+@sio.event
+async def disconnect(sid):
+    logger.info(f"Client disconnected: {sid}")
 
-# API routes
-@app.post("/models/upload")
-async def upload_model(request: UploadModelRequest):
-    response = server.handle_upload_model(
-        request.model_data
-    )
+@sio.event
+async def upload_model(sid, data):
+    """Handle model upload request"""
+    logger.info(f"Processing model upload from client: {sid}")
+    model_data = data.get('model_data', '')
     
-    if isinstance(response, tuple):
-        response_data, status_code = response
-        if status_code != 200:
-            raise HTTPException(status_code=status_code, detail=response_data["error"])
-        return response_data
+    if not model_data:
+        logger.error("Empty model data received")
+        return {"error": "No model data provided"}, 400
+        
+    response = server.handle_upload_model(model_data)
+    logger.info(f"Model upload processed")
     return response
 
-@app.get("/models/{model_id}/structure")
-async def get_model_structure(model_id: str):
-    response = server.handle_get_model_structure(model_id)
+@sio.event
+async def get_model_structure(sid, data):
+    """Handle get model structure request"""
+    logger.info(f"Getting model structure for client: {sid}")
+    model_id = data.get('model_id', '')
     
-    if isinstance(response, tuple):
-        response_data, status_code = response
-        if status_code != 200:
-            raise HTTPException(status_code=status_code, detail=response_data["error"])
-        return response_data
-    return response
+    if not model_id:
+        logger.error("No model ID provided")
+        return {"error": "No model ID provided"}, 400
+        
+    return server.handle_get_model_structure(model_id)
 
-@app.post("/inference/{model_id}/{layer_name}")
-async def inference(model_id: str, layer_name: str, request: InferenceRequest):
-    # Debug print for encrypted input
-    print("\nEncrypted Server Input Debug Info:")
-    print(f"Type: {type(request.encrypted_input)}")
-    print(f"Length: {len(request.encrypted_input)}")
-    print(f"Sample (first 100 chars): {request.encrypted_input[:100]}...")
-    print(f"Is Base64: {all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=' for c in request.encrypted_input)}")
+@sio.event
+async def inference(sid, data):
+    """Handle inference request"""
+    model_id = data.get('model_id', '')
+    layer_name = data.get('layer_name', '')
+    encrypted_input = data.get('encrypted_input', '')
     
-    response = server.handle_inference(
-        model_id,
-        layer_name,
-        request.encrypted_input
-    )
+    if not model_id or not layer_name or not encrypted_input:
+        missing = []
+        if not model_id: missing.append("model_id")
+        if not layer_name: missing.append("layer_name")
+        if not encrypted_input: missing.append("encrypted_input")
+        error_msg = f"Missing required parameters: {', '.join(missing)}"
+        logger.error(error_msg)
+        return {"error": error_msg}, 400
     
-    if isinstance(response, tuple):
-        response_data, status_code = response
-        if status_code != 200:
-            raise HTTPException(status_code=status_code, detail=response_data["error"])
-        return response_data
+    logger.info(f"Processing inference for client {sid}, model {model_id}, layer {layer_name}")
+    logger.debug(f"Encrypted input size: {len(encrypted_input)} bytes")
+    
+    response = server.handle_inference(model_id, layer_name, encrypted_input)
+    logger.info(f"Inference processed for layer {layer_name}")
     return response
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
 
 def main():
     parser = argparse.ArgumentParser(description="Run a Supersayan server")
@@ -106,11 +112,19 @@ def main():
     global server
     server = SupersayanServer(storage_dir=args.models_dir)
     
-    logger.info(f"Starting server on {args.host}:{args.port}")
+    logger.info(f"Starting Socket.IO server on {args.host}:{args.port}")
     logger.info(f"Using models directory: {args.models_dir}")
     
-    # Start the server
-    uvicorn.run(app, host=args.host, port=args.port)
+    # Start the server with proper uvicorn config for handling large requests
+    uvicorn.run(
+        app, 
+        host=args.host, 
+        port=args.port,
+        timeout_keep_alive=120,  # Increase keep-alive timeout
+        limit_concurrency=10,    # Limit concurrent connections for stability with large data
+        limit_max_requests=100,    # No limit on max requests
+        ws_max_size=10_000_000_000  # allow up to ~10 GB per message
+    )
 
 if __name__ == "__main__":
     main()

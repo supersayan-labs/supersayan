@@ -2,7 +2,7 @@ import logging
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union, Type, Any, Callable
+from typing import Dict, List, Optional, Tuple, Union, Type, Any, Callable, cast
 from enum import Enum
 
 from supersayan.core.encryption import encrypt, decrypt
@@ -19,188 +19,117 @@ LAYER_MAPPING = {
 }
 
 class ModelType(Enum):
-    """
-    Enum defining the types of supersayan models.
-    
-    PURE: All layers execute in FHE (Fully Homomorphic Encryption).
-    HYBRID: Specified layers are executed in FHE, others remain as original PyTorch modules running in plaintext.
-    """
     PURE = "pure"
     HYBRID = "hybrid"
 
 class SupersayanModel(nn.Module):
-    """
-    A unified model that can operate in pure or hybrid mode.
-    
-    In pure mode, all layers run in FHE.
-    In hybrid mode, specified layers are converted to FHE, others remain as original PyTorch modules.
-    """
     def __init__(
-        self, 
-        torch_model: nn.Module, 
+        self,
+        torch_model: nn.Module,
         model_type: ModelType = ModelType.PURE,
         fhe_modules: Optional[Union[List[str], List[Type[nn.Module]]]] = None
     ):
-        """
-        Initialize a SuperSayan model from a PyTorch model.
-        
-        Args:
-            torch_model: The PyTorch model to convert
-            model_type: Whether to create a pure (all FHE) or hybrid model
-            fhe_modules: Either a list of module names or module types to execute in FHE 
-                        (required for hybrid mode, ignored for pure mode)
-        
-        Raises:
-            ValueError: If a layer doesn't have a SuperSayan equivalent or if 
-                        fhe_modules are not provided in hybrid mode
-        """
         super(SupersayanModel, self).__init__()
         self.original_model = torch_model
         self.model_type = model_type
-        
-        # For hybrid model, fhe_modules must be provided
+
         if model_type == ModelType.HYBRID and not fhe_modules:
             raise ValueError("For hybrid model, fhe_modules must be provided")
-        
-        # Determine if we're using names or types
-        self.using_module_types = False
-        if fhe_modules and all(isinstance(m, type) for m in fhe_modules):
-            self.using_module_types = True
-            self.fhe_module_types = fhe_modules
-            self.fhe_module_names = []
+
+        # Decide if hybrid list is by type or by name
+        self.using_module_types = bool(fhe_modules and all(isinstance(m, type) for m in fhe_modules))
+        if self.using_module_types:
+            self.fhe_module_types = cast(List[Type[nn.Module]], fhe_modules)
+            self.fhe_module_names: List[str] = []
         else:
-            self.fhe_module_names = fhe_modules if fhe_modules else []
-            self.fhe_module_types = []
-        
+            self.fhe_module_names = cast(List[str], fhe_modules) if fhe_modules else []
+            self.fhe_module_types: List[Type[nn.Module]] = []
+
+        # Build modules_dict of **direct** children first
+        self.modules_dict = nn.ModuleDict()
+
         if model_type == ModelType.PURE:
-            # For pure mode, we convert all modules to SuperSayan FHE modules
-            self.modules_dict = nn.ModuleDict()
-            
-            # Get all direct children modules
+            # pure: convert every direct child
             for name, module in torch_model.named_children():
-                try:
-                    # Convert all modules to SuperSayan modules
-                    supersayan_module = self._convert_module(module)
-                    self.modules_dict[name] = supersayan_module
-                except ValueError as e:
-                    raise ValueError(f"Failed to convert module '{name}' to SuperSayan: {e}")
-            
-            # Store all module names for FHE execution
+                sup = self._convert_module(module)
+                self.modules_dict[name] = sup
             self.fhe_module_names = list(self.modules_dict.keys())
+
         else:
-            # Convert modules selectively for hybrid model
-            self.modules_dict = nn.ModuleDict()
-            
+            # hybrid: pick direct children to convert or leave alone
+            all_named = dict(torch_model.named_modules())
+            # if by type, collect *all* matching modules (including nested)
             if self.using_module_types:
-                # When using module types, find all modules of those types
-                all_modules = {}
-                for name, module in torch_model.named_modules():
-                    if any(isinstance(module, module_type) for module_type in self.fhe_module_types):
-                        # Skip modules that are nested inside already identified parent modules
-                        if not any(other_name != name and name.startswith(other_name) for other_name in all_modules.keys()):
-                            all_modules[name] = module
-                            self.fhe_module_names.append(name)
-                
-                # Now process direct children
-                for name, module in torch_model.named_children():
-                    if name in self.fhe_module_names or any(isinstance(module, module_type) for module_type in self.fhe_module_types):
-                        # Convert to SuperSayan module
-                        try:
-                            supersayan_module = self._convert_module(module)
-                            self.modules_dict[name] = supersayan_module
-                        except ValueError as e:
-                            raise ValueError(f"Failed to convert module '{name}' to SuperSayan: {e}")
-                    else:
-                        # Keep as PyTorch module
-                        self.modules_dict[name] = module
-            else:
-                # Using module names
-                # Validate that the specified module names exist in the model
-                all_module_names = dict(torch_model.named_modules())
-                for name in self.fhe_module_names:
-                    if name not in all_module_names:
-                        raise ValueError(f"Module '{name}' not found in the model. Available modules: {list(all_module_names.keys())}")
-                
-                # Convert modules selectively
+                # collect nested names too
+                for full_name, module in torch_model.named_modules():
+                    if any(isinstance(module, t) for t in self.fhe_module_types):
+                        self.fhe_module_names.append(full_name)
+                # now go through only direct children for modules_dict
                 for name, module in torch_model.named_children():
                     if name in self.fhe_module_names:
-                        # Convert to SuperSayan module
-                        try:
-                            supersayan_module = self._convert_module(module)
-                            self.modules_dict[name] = supersayan_module
-                        except ValueError as e:
-                            raise ValueError(f"Failed to convert module '{name}' to SuperSayan: {e}")
+                        self.modules_dict[name] = self._convert_module(module)
                     else:
-                        # Keep as PyTorch module
                         self.modules_dict[name] = module
-    
+
+            else:
+                # by explicit name list
+                # validate names
+                existing = set(torch_model.named_modules())
+                missing = [n for n in self.fhe_module_names if n not in existing]
+                if missing:
+                    raise ValueError(f"Module(s) not found: {missing}")
+                for name, module in torch_model.named_children():
+                    if name in self.fhe_module_names:
+                        self.modules_dict[name] = self._convert_module(module)
+                    else:
+                        self.modules_dict[name] = module
+
+            # --- NEW FLATTENING STEP ---
+            # bring in _all_ nested FHE modules so they actually get uploaded
+            for full_name in list(self.fhe_module_names):
+                if full_name not in self.modules_dict:
+                    # grab the raw submodule, convert it, and register under a safe key
+                    sub = all_named[full_name]
+                    sup = self._convert_module(sub)
+                    safe = full_name.replace('.', '_')
+                    self.modules_dict[safe] = sup
+
+            # sanitize our list of names to the same safe keys
+            self.fhe_module_names = [n.replace('.', '_') for n in self.fhe_module_names]
+
     def _convert_module(self, module: nn.Module) -> nn.Module:
-        """
-        Convert a PyTorch module to its SuperSayan equivalent.
-        
-        Args:
-            module: The PyTorch module to convert
-            
-        Returns:
-            The converted SuperSayan module
-            
-        Raises:
-            ValueError: If the module type doesn't have a SuperSayan equivalent
-        """
         module_type = type(module)
-        
         if module_type in LAYER_MAPPING:
-            # Get the SuperSayan equivalent class
-            supersayan_class = LAYER_MAPPING[module_type]
-            
-            if module_type == nn.Linear:
-                # Handle Linear layer specifically
-                supersayan_module = supersayan_class(
-                    in_features=module.in_features,
-                    out_features=module.out_features,
-                    bias=module.bias is not None
-                )
-                
-                # Copy weights and biases
-                supersayan_module.weight.data = module.weight.data.clone()
+            cls = LAYER_MAPPING[module_type]
+            # handle Linear
+            if isinstance(module, nn.Linear):
+                m = cls(module.in_features, module.out_features, bias=module.bias is not None)
+                m.weight.data.copy_(module.weight.data)
                 if module.bias is not None:
-                    supersayan_module.bias.data = module.bias.data.clone()
-                
-                return supersayan_module
-                
-            elif module_type == nn.Conv2d:
-                # Handle Conv2d layer
-                supersayan_module = supersayan_class(
-                    in_channels=module.in_channels,
-                    out_channels=module.out_channels,
-                    kernel_size=module.kernel_size,
-                    stride=module.stride,
-                    padding=module.padding,
-                    dilation=module.dilation,
-                    groups=module.groups,
-                    bias=module.bias is not None
+                    m.bias.data.copy_(module.bias.data)
+                return m
+            # handle Conv2d
+            elif isinstance(module, nn.Conv2d):
+                m = cls(
+                    module.in_channels, module.out_channels,
+                    module.kernel_size, module.stride,
+                    module.padding, module.dilation,
+                    module.groups, bias=module.bias is not None
                 )
-                
-                # Copy weights and biases
-                supersayan_module.weight.data = module.weight.data.clone()
+                m.weight.data.copy_(module.weight.data)
                 if module.bias is not None:
-                    supersayan_module.bias.data = module.bias.data.clone()
-                
-                return supersayan_module
-            
-            # Add handling for other layer types as they are implemented
-            
-        elif isinstance(module, nn.Sequential):
-            # Handle Sequential containers
-            supersayan_sequential = nn.Sequential()
-            for i, submodule in enumerate(module.children()):
-                supersayan_submodule = self._convert_module(submodule)
-                supersayan_sequential.add_module(str(i), supersayan_submodule)
-            return supersayan_sequential
+                    m.bias.data.copy_(module.bias.data)
+                return m
+
+        # recursive for Sequential
+        if isinstance(module, nn.Sequential):
+            seq = nn.Sequential()
+            for i, sub in enumerate(module):
+                seq.add_module(str(i), self._convert_module(sub))
+            return seq
+
+        raise ValueError(f"Module type {module_type} not supported; add to LAYER_MAPPING")
         
-        else:
-            raise ValueError(f"Module of type {module_type.__name__} not supported in SuperSayan. Supported types: {list(LAYER_MAPPING.keys())}")
-    
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass that handles both pure and hybrid modes.

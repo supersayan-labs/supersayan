@@ -46,10 +46,9 @@ def run_server(host, port, models_dir):
     cmd = [sys.executable, script_path, "--host", host, "--port", str(port), "--models-dir", models_dir]
     logger.info(f"Starting server with command: {' '.join(cmd)}")
     
-    # Start the server process - don't pipe stdout/stderr to allow proper initialization
+    # Start the server process
     process = subprocess.Popen(
         cmd,
-        # Ensure output is visible for debugging
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -60,27 +59,15 @@ def run_server(host, port, models_dir):
     start_time = time.time()
     timeout = 30  # Allow up to 30 seconds for server to start
     
-    # Start the log monitoring in a separate thread to prevent blocking
-    def log_server_output():
-        # Non-blocking read from stdout and stderr
-        while process.poll() is None:
-            stdout_line = process.stdout.readline()
-            if stdout_line:
-                logger.info(f"Server stdout: {stdout_line.strip()}")
-            stderr_line = process.stderr.readline()
-            if stderr_line:
-                logger.warning(f"Server stderr: {stderr_line.strip()}")
-    
-    import threading
-    log_thread = threading.Thread(target=log_server_output, daemon=True)
-    log_thread.start()
-    
-    # Wait for server to start and become responsive
+    # Wait for server to start
     logger.info(f"Waiting for server to start on {host}:{port}...")
     server_url = f"http://{host}:{port}"
     
+    # Look for specific message that indicates server is running
+    startup_message = f"Uvicorn running on http://{host}:{port}"
+    
     while time.time() - start_time < timeout:
-        # Check if the process is still running
+        # Check if process is still running
         if process.poll() is not None:
             stdout, stderr = process.communicate()
             logger.error(f"Server process exited with code {process.returncode}")
@@ -88,15 +75,31 @@ def run_server(host, port, models_dir):
             logger.error(f"Server stderr: {stderr}")
             raise RuntimeError(f"Server failed to start, exit code: {process.returncode}")
         
-        # Try to connect to the health endpoint
-        try:
-            response = requests.get(urljoin(server_url, "/health"), timeout=1)
-            if response.status_code == 200:
+        # Read from stderr (where Uvicorn logs appear)
+        line = process.stderr.readline().strip()
+        if line:
+            logger.warning(f"Server stderr: {line}")
+            if startup_message in line:
                 logger.info(f"Server started successfully at {server_url}")
-                return process
-        except requests.RequestException:
-            # Server not ready yet
-            time.sleep(1)
+                break
+    
+    # Start a thread to consume remaining output
+    def log_server_output():
+        while process.poll() is None:
+            stdout = process.stdout.readline()
+            if stdout:
+                logger.info(f"Server stdout: {stdout.strip()}")
+            stderr = process.stderr.readline()
+            if stderr:
+                logger.warning(f"Server stderr: {stderr.strip()}")
+    
+    import threading
+    log_thread = threading.Thread(target=log_server_output, daemon=True)
+    log_thread.start()
+    
+    # Return the process if we found the startup message
+    if time.time() - start_time < timeout:
+        return process
     
     # If we reach here, server didn't start within the timeout
     process.terminate()
@@ -167,14 +170,6 @@ def test_hybrid_house_price_regression(server_fixture):
     """
     server_url = server_fixture
     logger.info(f"Testing client against server at {server_url}")
-    
-    # Verify server is responsive
-    try:
-        response = requests.get(urljoin(server_url, "/health"), timeout=2)
-        assert response.status_code == 200, "Server health check failed"
-        logger.info("Server health check passed")
-    except Exception as e:
-        pytest.fail(f"Server health check failed: {e}")
 
     # Define a simple house price regressor model
     class HousePriceRegressor(nn.Module):
@@ -249,14 +244,6 @@ def test_hybrid_small_cnn(server_fixture):
     server_url = server_fixture
     logger.info(f"Testing CNN client against server at {server_url}")
     
-    # Verify server is responsive
-    try:
-        response = requests.get(urljoin(server_url, "/health"), timeout=2)
-        assert response.status_code == 200, "Server health check failed"
-        logger.info("Server health check passed")
-    except Exception as e:
-        pytest.fail(f"Server health check failed: {e}")
-    
     # Define a small CNN model for image classification
     class SmallCNN(nn.Module):
         def __init__(self):
@@ -325,14 +312,6 @@ def test_resnet18_random_input(server_fixture):
     server_url = server_fixture
     logger.info(f"Testing ResNet18 client against server at {server_url}")
     
-    # Verify server is responsive
-    try:
-        response = requests.get(urljoin(server_url, "/health"), timeout=2)
-        assert response.status_code == 200, "Server health check failed"
-        logger.info("Server health check passed")
-    except Exception as e:
-        pytest.fail(f"Server health check failed: {e}")
-    
     # Load a pre-trained ResNet18 model
     torch_model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     torch_model.eval()
@@ -385,12 +364,8 @@ if __name__ == "__main__":
         server_url = f"http://{host}:{port}"
         
         server_process = run_server(host, port, models_dir)
+        
         try:
-            # Verify server is responsive
-            response = requests.get(urljoin(server_url, "/health"))
-            assert response.status_code == 200, "Server health check failed"
-            logger.info("Server is ready, running test...")
-            
             # Choose which test to run
             # test_hybrid_house_price_regression(server_url)
             # # Uncomment to run the CNN test
