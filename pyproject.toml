@@ -19,7 +19,8 @@ dependencies = [
     "pytest-benchmark",
     "uvicorn",
     "fastapi",
-    "requests"
+    "requests",
+    "torchvision"
 ]
 
 classifiers = [

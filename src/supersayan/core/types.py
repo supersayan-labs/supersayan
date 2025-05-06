@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List, Union
+import sys
 
 class LWE:
     """
@@ -81,4 +82,6 @@ class LWE:
         )
     
     def __repr__(self):
-        return f"LWE(mask_size={len(self.mask)}, masked={self.masked})"
+        mask_size = sys.getsizeof(self.mask)
+        masked_size = sys.getsizeof(self.masked)
+        return f"LWE(mask_size={len(self.mask)} ({mask_size:,} bytes), masked={self.masked} ({masked_size:,} bytes))"
