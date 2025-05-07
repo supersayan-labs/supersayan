@@ -141,5 +141,5 @@ def test_resnet18_random_input(server_url="http://127.0.0.1:8000"):
 
 
 if __name__ == "__main__":
-    test_hybrid_house_price_regression()
-    # test_resnet18_random_input()
+    # test_hybrid_house_price_regression()
+    test_resnet18_random_input()

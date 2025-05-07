@@ -22,7 +22,7 @@ CONNECTION_TIMEOUT = 30
 MODEL_UPLOAD_TIMEOUT = 60
 MODEL_STRUCTURE_TIMEOUT = 30
 STANDARD_CHUNK_TIMEOUT = 60
-INFERENCE_TIMEOUT = 300  # 5 minutes for inference is more reasonable
+INFERENCE_TIMEOUT = 600  # 10 minutes for inference is more reasonable
 CLEANUP_TIMEOUT = 10
 
 

@@ -267,12 +267,45 @@ async def inference_complete(sid, data):
             return {"error": error_msg}, 400
 
         logger.info(f"Processing inference with assembled data")
-        response = server.handle_inference(model_id, layer_name, assembled_data)
-
-        chunk_manager.cleanup_transfer(transfer_id)
-        logger.info(f"Chunked inference completed")
-
-        return response
+        
+        # Break the response into smaller pieces to avoid socket disconnection
+        try:
+            response = server.handle_inference(model_id, layer_name, assembled_data)
+            
+            # Clean up the transfer data before sending the response
+            chunk_manager.cleanup_transfer(transfer_id)
+            logger.info(f"Chunked inference completed")
+            
+            # Check if the response needs to be chunked
+            response_data, status_code = response
+            
+            if status_code == 200 and "encrypted_output" in response_data:
+                output_data = response_data["encrypted_output"]
+                
+                if chunk_manager.needs_chunking(output_data):
+                    logger.info(f"Response is large, sending as chunked response")
+                    
+                    resp_transfer_id, chunks = chunk_manager.create_transfer(output_data)
+                    
+                    # Store the chunks in the chunk manager for retrieval
+                    chunk_manager.register_transfer(resp_transfer_id, len(chunks))
+                    
+                    # Add each chunk to the transfer
+                    for chunk in chunks:
+                        chunk_manager.add_chunk(chunk)
+                    
+                    return {
+                        "chunked": True,
+                        "transfer_id": resp_transfer_id,
+                        "total_chunks": len(chunks),
+                    }, 200
+            
+            return response
+            
+        except Exception as e:
+            logger.exception(f"Error in inference processing: {e}")
+            return {"error": f"Processing error: {str(e)}"}, 500
+            
     except Exception as e:
         logger.exception(f"Error completing chunked inference: {e}")
         return {"error": f"Failed to complete chunked inference: {str(e)}"}, 500
