@@ -129,13 +129,20 @@ async def inference(sid, data):
 
                 transfer_id, chunks = chunk_manager.create_transfer(output_data)
 
+                # Store the chunks in the chunk manager for retrieval
+                chunk_manager.register_transfer(transfer_id, len(chunks))
+
+                # Add each chunk to the transfer
+                for chunk in chunks:
+                    chunk_manager.add_chunk(chunk)
+
                 return {
                     "chunked": True,
                     "transfer_id": transfer_id,
                     "total_chunks": len(chunks),
                 }, 200
 
-        return response
+        return response_data, status_code
     except Exception as e:
         logger.exception(f"Error processing inference: {e}")
         return {"error": f"Failed to process inference: {str(e)}"}, 500
