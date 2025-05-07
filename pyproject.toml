@@ -25,6 +25,9 @@ dependencies = [
     "torchsummary>=1.5.1",
     "black>=25.1.0",
     "gevent>=25.4.2",
+    "scalene>=1.5.51",
+    "python-socketio>=5.13.0",
+    "simple-websocket>=1.1.0",
 ]
 
 classifiers = [

@@ -30,7 +30,7 @@ def serialize_data(data: Any) -> str:
 
     # Convert to JSON and then Base64 encode
     json_str = json.dumps(serializable)
-    return base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
+    return json_str
 
 
 def deserialize_data(data_base64: str) -> Any:
@@ -44,8 +44,8 @@ def deserialize_data(data_base64: str) -> Any:
         Deserialized object - primarily focused on returning numpy arrays
     """
     # Decode Base64 and parse JSON
-    json_str = base64.b64decode(data_base64).decode("utf-8")
-    serializable = json.loads(json_str)
+    # json_str = base64.b64decode(data_base64).decode("utf-8")
+    serializable = json.loads(data_base64)
 
     # Convert from serializable format to objects
     result = convert_from_serializable(serializable)
