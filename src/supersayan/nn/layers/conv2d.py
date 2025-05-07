@@ -1,19 +1,16 @@
+# conv2d.py
 import torch
 import torch.nn as nn
 import numpy as np
-from typing import Tuple, List, Union
-import logging
-
+from typing import Tuple, Union
 from supersayan.core.bindings import SupersayanTFHE
-
-logger = logging.getLogger(__name__)
 
 
 class Conv2d(nn.Module):
     """
-    A PyTorch-style Conv2d layer redefined for encrypted data.
-
-    The forward pass expects a NumPy array of LWE ciphertexts of shape (batch, channels, height, width).
+    PyTorch-style 2-D convolution for **encrypted** feature maps.
+    Forward delegates to a fast Julia kernel that does a classical
+    sliding-window convolution (no Toeplitz tricks).
     """
 
     def __init__(
@@ -27,142 +24,90 @@ class Conv2d(nn.Module):
         groups: int = 1,
         bias: bool = True,
     ):
-        super(Conv2d, self).__init__()
+        super().__init__()
 
-        if isinstance(kernel_size, int):
-            kernel_size = (kernel_size, kernel_size)
-        if isinstance(stride, int):
-            stride = (stride, stride)
-        if isinstance(padding, int):
-            padding = (padding, padding)
-        if isinstance(dilation, int):
-            dilation = (dilation, dilation)
+        # --- sanitize hyper-parameters ----
+        tup = lambda v: (v, v) if isinstance(v, int) else v
+        self.kernel_size, self.stride = tup(kernel_size), tup(stride)
+        self.padding, self.dilation = tup(padding), tup(dilation)
+        self.in_channels, self.out_channels, self.groups = (
+            in_channels,
+            out_channels,
+            groups,
+        )
+        if in_channels % groups or out_channels % groups:
+            raise ValueError("in/out channels must be divisible by groups")
 
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.kernel_size = kernel_size
-        self.stride = stride
-        self.padding = padding
-        self.dilation = dilation
-        self.groups = groups
-
-        if in_channels % groups != 0 or out_channels % groups != 0:
-            raise ValueError("in_channels and out_channels must be divisible by groups")
-
-        # Initialize weights as torch parameters with shape (out_channels, in_channels//groups, K_h, K_w)
+        # --- weights ---
+        kh, kw = self.kernel_size
         self.weight = nn.Parameter(
-            torch.randn(
-                out_channels, in_channels // groups, kernel_size[0], kernel_size[1]
-            )
+            torch.randn(out_channels, in_channels // groups, kh, kw)
         )
+        self.bias = nn.Parameter(torch.randn(out_channels)) if bias else None
 
-        if bias:
-            self.bias = nn.Parameter(torch.randn(out_channels))
-        else:
-            self.register_parameter("bias", None)
+    # ------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------
+    def _output_spatial_size(self, h_in: int, w_in: int) -> Tuple[int, int]:
+        h_out = (
+            h_in
+            + 2 * self.padding[0]
+            - self.dilation[0] * (self.kernel_size[0] - 1)
+            - 1
+        ) // self.stride[0] + 1
+        w_out = (
+            w_in
+            + 2 * self.padding[1]
+            - self.dilation[1] * (self.kernel_size[1] - 1)
+            - 1
+        ) // self.stride[1] + 1
+        return h_out, w_out
 
-        # Pre-compute toeplitz matrices for the BSGS optimization
-        self.toeplitz_matrices = None
-        self.precomputed = False
-
-    def _compute_output_shape(self, input_shape: Tuple[int, int]) -> Tuple[int, int]:
+    # ------------------------------------------------------------
+    # forward
+    # ------------------------------------------------------------
+    def forward(self, x: np.ndarray) -> np.ndarray:
         """
-        Compute the output shape of the convolution operation.
+        Args
+        ----
+        x: numpy array of LWE ciphertexts
+           shape = (N, C_in, H, W)
 
-        Args:
-            input_shape: A tuple (height, width) of the input feature map.
-
-        Returns:
-            A tuple (height, width) of the output feature map.
+        Returns
+        -------
+        numpy array of LWE ciphertexts
+           shape = (N, C_out, H_out, W_out)
         """
-        h_in, w_in = input_shape
+        n, c, h, w = x.shape
+        if c != self.in_channels:
+            raise ValueError(f"expected {self.in_channels} input channels, got {c}")
 
-        # Apply formula: H_out = (H_in + 2 * padding - dilation * (kernel_size - 1) - 1) / stride + 1
-        h_out = int(
-            (
-                h_in
-                + 2 * self.padding[0]
-                - self.dilation[0] * (self.kernel_size[0] - 1)
-                - 1
-            )
-            / self.stride[0]
-            + 1
-        )
-        w_out = int(
-            (
-                w_in
-                + 2 * self.padding[1]
-                - self.dilation[1] * (self.kernel_size[1] - 1)
-                - 1
-            )
-            / self.stride[1]
-            + 1
+        h_out, w_out = self._output_spatial_size(h, w)
+
+        # detach → plain numpy for Julia
+        w_np = self.weight.detach().cpu().numpy()
+        b_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
+
+        y_flat = SupersayanTFHE.Layers.Conv2d.conv2d_forward(
+            x.flatten().tolist(),      # ciphertexts
+            (n, c, h, w),              # input shape
+            w_np,                      # plaintext weights
+            self.kernel_size,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.groups,
+            b_np,                      # plaintext bias
         )
 
-        return (h_out, w_out)
-
-    def forward(self, input: np.ndarray) -> np.ndarray:
-        """
-        Performs the forward pass using homomorphic operations.
-
-        Args:
-            input: A NumPy array of LWE ciphertexts with shape (batch, channels, height, width).
-
-        Returns:
-            A NumPy array of LWE ciphertexts with shape (batch, out_channels, out_height, out_width).
-        """
-        batch_size, channels, height, width = input.shape
-
-        if channels != self.in_channels:
-            raise ValueError(
-                f"Expected input with {self.in_channels} channels, got {channels}"
-            )
-
-        # Compute output dimensions
-        out_height, out_width = self._compute_output_shape((height, width))
-
-        # Detach the weight and bias parameters as plain numbers
-        weight_np = self.weight.detach().cpu().numpy()
-        bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
-
-        # Build Toeplitz matrices if not already done
-        if not self.precomputed or self.toeplitz_matrices is None:
-            # Build toeplitz matrices using Julia backend
-            self.toeplitz_matrices = (
-                SupersayanTFHE.Layers.Conv2d.build_toeplitz_matrices(
-                    input.shape,
-                    weight_np,
-                    self.kernel_size,
-                    self.stride,
-                    self.padding,
-                    self.dilation,
-                    self.groups,
-                )
-            )
-            self.precomputed = True
-
-        # Flatten input for Julia processing using vectorized operations
-        flattened_input = input.flatten().tolist()
-
-        # Call Julia implementation directly
-        julia_result = SupersayanTFHE.Layers.Conv2d.conv2d_forward(
-            flattened_input, input.shape, self.toeplitz_matrices, bias_np
+        # Julia returns a vector of ciphertexts → reshape
+        return np.array(y_flat, dtype=object).reshape(
+            n, self.out_channels, h_out, w_out
         )
-
-        # Reshape the result back to (batch_size, out_channels, out_height, out_width) using vectorized operations
-        output = np.array(julia_result, dtype=object).reshape(
-            batch_size, self.out_channels, out_height, out_width
-        )
-
-        return output
 
     def __repr__(self):
         return (
-            f"Conv2d(in_channels={self.in_channels}, "
-            f"out_channels={self.out_channels}, "
-            f"kernel_size={self.kernel_size}, "
-            f"stride={self.stride}, "
-            f"padding={self.padding}, "
-            f"groups={self.groups}, "
-            f"bias={self.bias is not None})"
+            f"Conv2d(in={self.in_channels}, out={self.out_channels}, "
+            f"ks={self.kernel_size}, stride={self.stride}, pad={self.padding}, "
+            f"dil={self.dilation}, groups={self.groups}, bias={self.bias is not None})"
         )
