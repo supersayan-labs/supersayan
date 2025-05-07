@@ -12,7 +12,7 @@ from .convert import (
     convert_to_hybrid_supersayan,
     convert_model,
     SupersayanModel,
-    ModelType
+    ModelType,
 )
 
 __all__ = [
@@ -22,5 +22,5 @@ __all__ = [
     "SupersayanModel",
     "ModelType",
     "Linear",
-    "Conv2d"
+    "Conv2d",
 ]

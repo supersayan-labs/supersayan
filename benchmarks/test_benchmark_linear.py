@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
         (1, 100, 100),
         (8, 10, 10),
         (8, 100, 100),
-    ]
+    ],
 )
 def test_benchmark_linear(benchmark, batch_size, in_features, out_features):
     """Benchmark Linear layer with different input and output sizes."""

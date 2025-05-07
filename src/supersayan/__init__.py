@@ -16,14 +16,14 @@ from .nn.convert import (
     convert_to_hybrid_supersayan,
     convert_model,
     SupersayanModel,
-    ModelType
+    ModelType,
 )
 
 __all__ = [
-    "encryption", 
-    "keygen", 
-    "bindings", 
-    "operations", 
+    "encryption",
+    "keygen",
+    "bindings",
+    "operations",
     "layers",
     "convert_to_pure_supersayan",
     "convert_to_hybrid_supersayan",

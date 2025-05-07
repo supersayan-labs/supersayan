@@ -23,6 +23,7 @@ dependencies = [
     "torchvision",
     "websocket-client>=1.8.0",
     "torchsummary>=1.5.1",
+    "black>=25.1.0",
 ]
 
 classifiers = [

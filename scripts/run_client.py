@@ -16,18 +16,19 @@ from supersayan.remote.client import SupersayanClient
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 def test_hybrid_house_price_regression(server_url="http://127.0.0.1:8000"):
     """
     Test the client-server architecture with a house price regression model.
-    
+
     Args:
         server_url: The server URL
     """
+
     class HousePriceRegressor(nn.Module):
         def __init__(self):
             super().__init__()
@@ -48,43 +49,42 @@ def test_hybrid_house_price_regression(server_url="http://127.0.0.1:8000"):
             return x
 
     torch_model = HousePriceRegressor()
-    
+
     test_x = torch.rand(5, 5, dtype=torch.float32)
-    
+
     torch_pred = torch_model(test_x)
     torch_values = torch_pred.detach().numpy()
-    
+
     logger.info("Creating hybrid client...")
     client_hybrid = SupersayanClient(
-        server_url=server_url,
-        torch_model=torch_model,
-        fhe_modules=[nn.Linear]
+        server_url=server_url, torch_model=torch_model, fhe_modules=[nn.Linear]
     )
-    
+
     try:
         logger.info("Running forward pass...")
         client_hybrid_pred = client_hybrid(test_x)
         client_hybrid_values = client_hybrid_pred.detach().numpy()
-        
+
         logger.info("Original PyTorch model predictions:")
         logger.info(torch_values)
         logger.info("Hybrid SupersayanClient model predictions:")
         logger.info(client_hybrid_values)
-        
+
         mean_diff = np.mean(np.abs(torch_values - client_hybrid_values))
         logger.info(f"Mean absolute difference: {mean_diff}")
-        
+
         assert mean_diff < 1000.0, f"Model predictions differ too much: {mean_diff}"
-        
+
     except Exception as e:
         logger.error(f"Error during client test: {e}", exc_info=True)
         raise
+
 
 def test_resnet18_random_input(server_url="http://127.0.0.1:8000"):
     """
     Test the client-server architecture with a ResNet18 model on random input.
     Only the Conv2d and Linear layers run in FHE.
-    
+
     Args:
         server_url: The server URL
     """
@@ -92,38 +92,39 @@ def test_resnet18_random_input(server_url="http://127.0.0.1:8000"):
     torch_model.eval()
 
     print(summary(torch_model, (3, 224, 224)))
-    
+
     test_x = torch.rand(1, 3, 224, 224, dtype=torch.float32)
-    
+
     torch_pred = torch_model(test_x)
     torch_values = torch_pred.detach().numpy()
-    
+
     logger.info("Creating hybrid ResNet18 client...")
     client_hybrid = SupersayanClient(
         server_url=server_url,
         torch_model=torch_model,
-        fhe_modules=[nn.Conv2d, nn.Linear]
+        fhe_modules=[nn.Conv2d, nn.Linear],
     )
-    
+
     try:
         logger.info("Running ResNet18 forward pass...")
-        
+
         client_hybrid_pred = client_hybrid(test_x)
         client_hybrid_values = client_hybrid_pred.detach().numpy()
-        
+
         logger.info("Original PyTorch model predictions:")
         logger.info(torch_values)
         logger.info("Hybrid SupersayanClient model predictions:")
         logger.info(client_hybrid_values)
-        
+
         mean_diff = np.mean(np.abs(torch_values - client_hybrid_values))
         logger.info(f"Mean absolute difference: {mean_diff}")
-        
+
         assert mean_diff < 1.0, f"Model predictions differ too much: {mean_diff}"
-        
+
     except Exception as e:
         logger.error(f"Error during ResNet18 client test: {e}", exc_info=True)
         raise
+
 
 if __name__ == "__main__":
     test_resnet18_random_input()
