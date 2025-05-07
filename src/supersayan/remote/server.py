@@ -32,7 +32,7 @@ class ModelStore:
             storage_dir: Directory to store model files
         """
         self.storage_dir = storage_dir
-        self.models = {}  # model_id -> model object
+        self.models = {}
         os.makedirs(storage_dir, exist_ok=True)
     
     def save_model(self, model_data: bytes) -> str:
@@ -66,17 +66,14 @@ class ModelStore:
         Raises:
             ValueError: If the model is not found
         """
-        # Check if model is already loaded in memory
         if model_id in self.models:
             return {"model": self.models[model_id]}
         
-        # Try to load the model from disk
         model_path = os.path.join(self.storage_dir, f"{model_id}.pt")
         if not os.path.exists(model_path):
             raise ValueError(f"Model {model_id} not found")
         
         try:
-            # First try with weights_only=False (most compatible option)
             model = torch.load(
                 model_path,
                 weights_only=False,
@@ -84,7 +81,6 @@ class ModelStore:
             )
         except Exception as e:
             try:
-                # If that fails, try with weights_only=True and safe_globals
                 model = torch.load(
                     model_path,
                     weights_only=True,
@@ -94,10 +90,8 @@ class ModelStore:
                 logger.error(f"Failed to load model {model_id}: {str(e)} then {str(e2)}")
                 raise ValueError(f"Failed to load model {model_id}: {e}")
         
-        # Cache the model in memory
         self.models[model_id] = model
 
-        # Print model layers and structure
         logger.info(f"Model {model_id} structure:")
         for name, module in model.named_modules():
             prefix = "  " * len(name.split("."))
@@ -115,11 +109,9 @@ class ModelStore:
         Returns:
             True if the model was deleted, False otherwise
         """
-        # Remove from memory if present
         if model_id in self.models:
             del self.models[model_id]
         
-        # Remove from disk if present
         model_path = os.path.join(self.storage_dir, f"{model_id}.pt")
         if os.path.exists(model_path):
             try:
@@ -160,13 +152,11 @@ class SupersayanServer:
         Returns:
             Response with model ID
         """
-        # Decode model data
         try:
             model_data = base64.b64decode(model_data_base64)
         except Exception as e:
             return {"error": f"Invalid model data: {e}"}, 400
         
-        # Save the model
         try:
             model_id = self.model_store.save_model(model_data)
             return {"model_id": model_id}, 200
@@ -187,7 +177,6 @@ class SupersayanServer:
             model_info = self.model_store.get_model(model_id)
             model = model_info["model"]
             
-            # Extract structure information
             layer_order = []
             for name, _ in model.named_children():
                 layer_order.append(name)
