@@ -7,10 +7,6 @@ $ python scripts/run_server.py --host 0.0.0.0 --port 8000
 """
 from __future__ import annotations
 
-import faulthandler
-faulthandler.enable(all_threads=True)
-
-
 import argparse
 import hashlib
 import io
@@ -19,6 +15,7 @@ import pickle
 import socket
 import struct
 import threading
+import multiprocessing as mp
 from typing import Any, Dict, Tuple
 
 logger = logging.getLogger(__name__)
@@ -160,9 +157,32 @@ def _handle_client(conn: socket.socket, addr: tuple[str, int], server: Supersaya
 
 
 # -----------------------------------------------------------------------------
-# Main entry‑point
+# Helper: accept-loop wrapper
 # -----------------------------------------------------------------------------
+def _serve_forever(host: str, port: int, models_dir: str) -> None:
+    """Listen on *host:port* and serve *one* client at a time, inline.
 
+    Every request is handled on the **main thread**; no threads, no
+    processes, therefore no Julia thread-safety problems.
+    """
+    srv = SupersayanServer(storage_dir=models_dir)
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((host, port))
+        s.listen()
+        logger.info("Supersayan server listening on %s:%s", host, port)
+
+        while True:
+            conn, addr = s.accept()
+            # Handle the whole client session right here, blocking.
+            _handle_client(conn, addr, srv)
+            # When the client disconnects, _handle_client() returns and we
+            # immediately accept the next connection.
+
+# -----------------------------------------------------------------------------
+# Main entry-point  (single-threaded)
+# -----------------------------------------------------------------------------
 def main() -> None:  # noqa: D401
     parser = argparse.ArgumentParser(description="Run Supersayan TCP server")
     parser.add_argument("--host", default="127.0.0.1", help="interface to bind to")
@@ -174,20 +194,13 @@ def main() -> None:  # noqa: D401
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
 
-    srv = SupersayanServer(storage_dir=args.models_dir)
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((args.host, args.port))
-        s.listen()
-        logger.info("Supersayan server listening on %s:%s", args.host, args.port)
-
-        while True:
-            conn, addr = s.accept()
-            thread = threading.Thread(target=_handle_client, args=(conn, addr, srv), daemon=True)
-            thread.start()
+    # One-client-at-a-time, on the main thread
+    _serve_forever(args.host, args.port, args.models_dir)
 
 
 if __name__ == "__main__":
