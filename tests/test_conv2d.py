@@ -28,6 +28,11 @@ def test_conv2d_layer():
         in_channels=3, out_channels=4, kernel_size=3, stride=1, padding=1, bias=True
     )
 
+    # import pickle
+    # logger.info("Pickling Conv2d layer...")
+    # conv = pickle.loads(pickle.dumps(conv))
+    # logger.info("Unpickled Conv2d layer")
+    
     # Generate random input with batch size 1 and shape (1, 3, 8, 8)
     input_data = torch.randn(1, 3, 8, 8)
     print("Input shape:", input_data.shape)

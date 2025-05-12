@@ -6,7 +6,9 @@ logger = logging.getLogger(__name__)
 
 try:
     # Initialize Julia runtime
-    Julia(compiled_modules=False)
+    logger.info("Initializing Julia runtime")
+    Julia(compiled_modules=False, threads=True)
+    logger.info("Julia runtime initialized")
 except Exception as e:
     logger.error("Failed to initialize Julia: %s", e)
     raise

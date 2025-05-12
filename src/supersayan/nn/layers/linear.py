@@ -42,6 +42,7 @@ class Linear(nn.Module):
         Returns:
             np.ndarray[LWE]: A NumPy array of LWE ciphertexts with shape (batch, out_features).
         """
+        logger.info(f"Linear forward pass with input shape: {input.shape}")
         batch_size = input.shape[0]
 
         # Detach the weight and bias parameters as plain numbers.
@@ -52,12 +53,13 @@ class Linear(nn.Module):
 
         # Flatten the input array to a 1D vector for Julia processing using vectorized operations
         flattened_input = input.reshape(batch_size * self.in_features).tolist()
-
+        
+        logger.info(f"About to call Julia implementation directly")
         # Call Julia implementation directly
         julia_result = SupersayanTFHE.Layers.Linear.linear_forward(
             flattened_input, weight_np, bias_np
         )
-
+        logger.info(f"Julia implementation returned result")
         # Reshape the result back to (batch_size, out_features) using vectorized operations
         result = np.array(julia_result, dtype=object).reshape(
             batch_size, self.out_features
