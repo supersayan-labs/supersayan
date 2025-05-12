@@ -1,421 +1,193 @@
 #!/usr/bin/env python3
-"""
-Script to run a Supersayan server.
+"""Lightweight TCP front‑end for **SupersayanServer**.
 
-This script starts a Socket.IO server that provides endpoints for uploading models,
-retrieving model structure, and performing inference with FHE layers.
+Usage
+-----
+$ python scripts/run_server.py --host 0.0.0.0 --port 8000
 """
+from __future__ import annotations
 
-import os
-import sys
-import logging
+import faulthandler
+faulthandler.enable(all_threads=True)
+
+
 import argparse
-import socketio
-import uvicorn
-from typing import Dict, Any
+import hashlib
+import io
+import logging
+import pickle
+import socket
+import struct
+import threading
+from typing import Any, Dict, Tuple
 
-# Add parent directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
-# Now import the server module
-from supersayan.remote.server import SupersayanServer
-from supersayan.remote.chunking import ChunkManager
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
 logger = logging.getLogger(__name__)
 
-# Create Socket.IO server with optimized settings for large data transfers
-sio = socketio.AsyncServer(
-    async_mode="asgi",
-    ping_timeout=300,  # 5 minute timeout
-    ping_interval=60,  # 1 minute ping interval
-    cors_allowed_origins="*",
-    max_http_buffer_size=1024 * 1024 * 1024,  # 1GB buffer
-)
-app = socketio.ASGIApp(sio)
 
-# Initialize server
-server = None
+from supersayan.remote.server import SupersayanServer
 
-# Store chunk managers for each client
-chunk_managers = {}
+# -----------------------------------------------------------------------------
+# TCP helpers – identical to those used by the client
+# -----------------------------------------------------------------------------
+_HEADER_FMT = "!Q"
+_HEADER_SIZE = struct.calcsize(_HEADER_FMT)
 
+# Counter to track connections
+_connection_counter = 0
 
-# Socket.IO event handlers
-@sio.event
-async def connect(sid, environ):
-    """Handle client connection."""
-    logger.info(f"Client connected: {sid}")
-    chunk_managers[sid] = ChunkManager()
+def _recv_exact(sock: socket.socket, n: int) -> bytes:
+    data = bytearray()
+    while len(data) < n:
+        chunk = sock.recv(n - len(data))
+        if not chunk:
+            raise ConnectionError("client disconnected")
+        data.extend(chunk)
+    return bytes(data)
 
 
-@sio.event
-async def disconnect(sid):
-    """Handle client disconnection."""
-    logger.info(f"Client disconnected: {sid}")
-    if sid in chunk_managers:
-        del chunk_managers[sid]
+def _recv_obj(sock: socket.socket) -> Tuple[Any, int]:
+    size_bytes = _recv_exact(sock, _HEADER_SIZE)
+    size = struct.unpack(_HEADER_FMT, size_bytes)[0]
 
+    payload = _recv_exact(sock, size)
+    actual_length = len(payload)
+    if actual_length != size:
+        logger.error(f"Length mismatch: Expected {size} bytes but received {actual_length} bytes")
+        raise ValueError(f"Length mismatch: Expected {size} bytes but received {actual_length} bytes")
 
-@sio.event
-async def upload_model(sid, data):
-    """Handle model upload request."""
-    logger.info(f"Processing model upload from client: {sid}")
-    model_data = data.get("model_data", "")
+    received_hash = hashlib.md5(payload).hexdigest()
+    obj = pickle.loads(payload)
 
-    if not model_data:
-        logger.error("Empty model data received")
-        return {"error": "No model data provided"}, 400
-
-    response = server.handle_upload_model(model_data)
-    logger.info(f"Model upload processed")
-    return response
-
-
-@sio.event
-async def get_model_structure(sid, data):
-    """Handle get model structure request."""
-    logger.info(f"Getting model structure for client: {sid}")
-    model_id = data.get("model_id", "")
-
-    if not model_id:
-        logger.error("No model ID provided")
-        return {"error": "No model ID provided"}, 400
-
-    return server.handle_get_model_structure(model_id)
-
-
-@sio.event
-async def inference(sid, data):
-    """Handle inference request."""
-    try:
-        model_id = data.get("model_id", "")
-        layer_name = data.get("layer_name", "")
-        encrypted_input = data.get("encrypted_input", "")
-
-        if not model_id or not layer_name or not encrypted_input:
-            missing = []
-            if not model_id:
-                missing.append("model_id")
-            if not layer_name:
-                missing.append("layer_name")
-            if not encrypted_input:
-                missing.append("encrypted_input")
-            error_msg = f"Missing required parameters: {', '.join(missing)}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
+    conn_id = 0
+    if isinstance(obj, dict) and "_hash" in obj:
+        sent_hash = obj["_hash"]                     # ① keep it
+        calc_hash = hashlib.md5(
+            pickle.dumps({k: v for k, v in obj.items() if k != "_hash"})
+        ).hexdigest()                               # ② hash still includes _conn_id
+        conn_id = obj.get("_conn_id", 0)
 
         logger.info(
-            f"Processing inference for client {sid}, model {model_id}, layer {layer_name}"
+            f"[CONN:{conn_id}] Received object: size={actual_length} "
+            f"bytes, sent_hash={sent_hash}, calc_hash={calc_hash}"
         )
+        if sent_hash != calc_hash:
+            logger.warning(f"[CONN:{conn_id}] Hash mismatch!")
 
-        response = server.handle_inference(model_id, layer_name, encrypted_input)
-        logger.info(f"Inference processed for layer {layer_name}")
-
-        response_data, status_code = response
-
-        if status_code == 200 and "encrypted_output" in response_data:
-            output_data = response_data["encrypted_output"]
-
-            if sid not in chunk_managers:
-                chunk_managers[sid] = ChunkManager()
-
-            chunk_manager = chunk_managers[sid]
-            if chunk_manager.needs_chunking(output_data):
-                logger.info(f"Output is large, sending as chunked response")
-
-                transfer_id, chunks = chunk_manager.create_transfer(output_data)
-
-                # Store the chunks in the chunk manager for retrieval
-                chunk_manager.register_transfer(transfer_id, len(chunks))
-
-                # Add each chunk to the transfer
-                for chunk in chunks:
-                    chunk_manager.add_chunk(chunk)
-
-                return {
-                    "chunked": True,
-                    "transfer_id": transfer_id,
-                    "total_chunks": len(chunks),
-                }, 200
-
-        return response_data, status_code
-    except Exception as e:
-        logger.exception(f"Error processing inference: {e}")
-        return {"error": f"Failed to process inference: {str(e)}"}, 500
-
-
-# Chunked data handlers
-@sio.event
-async def inference_start(sid, data):
-    """Handle start of a chunked inference request."""
-    try:
-        model_id = data.get("model_id", "")
-        layer_name = data.get("layer_name", "")
-        transfer_id = data.get("transfer_id", "")
-        total_chunks = data.get("total_chunks", 0)
-
-        if not model_id or not layer_name or not transfer_id or not total_chunks:
-            missing = []
-            if not model_id:
-                missing.append("model_id")
-            if not layer_name:
-                missing.append("layer_name")
-            if not transfer_id:
-                missing.append("transfer_id")
-            if not total_chunks:
-                missing.append("total_chunks")
-            error_msg = f"Missing required parameters: {', '.join(missing)}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
+        # only now strip the helper keys
+        obj.pop("_hash", None)
+        obj.pop("_conn_id", None)
+    else:
         logger.info(
-            f"Beginning chunked inference, model {model_id}, layer {layer_name}"
+            f"[CONN:unknown] Received non-dict object: "
+            f"size={actual_length} bytes, "
+            f"recv_hash={received_hash}"
         )
 
-        if sid not in chunk_managers:
-            chunk_managers[sid] = ChunkManager()
-
-        chunk_managers[sid].register_transfer(
-            transfer_id, total_chunks, {"model_id": model_id, "layer_name": layer_name}
-        )
-
-        return {"status": "ready", "transfer_id": transfer_id}, 200
-    except Exception as e:
-        logger.exception(f"Error starting chunked inference: {e}")
-        return {"error": f"Failed to start chunked inference: {str(e)}"}, 500
+    return obj, conn_id
 
 
-@sio.event
-async def chunk(sid, data):
-    """Handle a chunk of data for an ongoing transfer."""
+def _send_obj(sock: socket.socket, obj: Any, conn_id: int = None) -> None:
+    global _connection_counter
+
+    if conn_id is None:
+        _connection_counter += 1
+        conn_id = _connection_counter
+
+    if isinstance(obj, dict):
+        obj["_conn_id"] = conn_id
+
+    # 1) Serialize content, hash it
+    payload_content = pickle.dumps(obj)
+    content_hash = hashlib.md5(payload_content).hexdigest()
+
+    # 2) Inject hash
+    if isinstance(obj, dict):
+        obj["_hash"] = content_hash
+
+    # 3) Final serialize
+    payload = pickle.dumps(obj)
+    payload_size = len(payload)
+
+    logger.info(
+        f"[CONN:{conn_id}] Sending object: "
+        f"size={payload_size} bytes, "
+        f"content_hash={content_hash}"
+    )
+
+    sock.sendall(struct.pack(_HEADER_FMT, payload_size))
+    sock.sendall(payload)
+
+# -----------------------------------------------------------------------------
+# Client handler
+# -----------------------------------------------------------------------------
+
+def _handle_client(conn: socket.socket, addr: tuple[str, int], server: SupersayanServer) -> None:  # noqa: D401
+    logger.info("connection from %s:%s", *addr)
     try:
-        transfer_id = data.get("transfer_id", "")
-        chunk_index = data.get("chunk_index", -1)
-        total_chunks = data.get("total_chunks", 0)
-        chunk_data = data.get("data", "")
+        while True:
+            try:
+                request, conn_id = _recv_obj(conn)
+            except ConnectionError:
+                break  # clean disconnect
 
-        if not transfer_id or chunk_index < 0 or not total_chunks or not chunk_data:
-            missing = []
-            if not transfer_id:
-                missing.append("transfer_id")
-            if chunk_index < 0:
-                missing.append("chunk_index")
-            if not total_chunks:
-                missing.append("total_chunks")
-            if not chunk_data:
-                missing.append("data")
-            error_msg = f"Missing required parameters: {', '.join(missing)}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
+            if not isinstance(request, dict) or "command" not in request:
+                _send_obj(conn, {"status": False, "error": "invalid request"}, conn_id)
+                continue
 
-        if sid not in chunk_managers:
-            error_msg = f"No chunk manager for client {sid}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        chunk_manager = chunk_managers[sid]
-        all_received = chunk_manager.add_chunk(data)
-
-        return {
-            "status": "received",
-            "transfer_id": transfer_id,
-            "chunk_index": chunk_index,
-            "complete": all_received,
-        }, 200
-    except Exception as e:
-        logger.exception(f"Error processing chunk: {e}")
-        return {"error": f"Failed to process chunk: {str(e)}"}, 500
-
-
-@sio.event
-async def inference_complete(sid, data):
-    """Handle completion of a chunked inference request"""
-    try:
-        transfer_id = data.get("transfer_id", "")
-
-        if not transfer_id:
-            error_msg = "Missing transfer_id"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        logger.info(f"Completing chunked inference for transfer {transfer_id[:10]}...")
-
-        if sid not in chunk_managers:
-            error_msg = f"No chunk manager for client {sid}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        chunk_manager = chunk_managers[sid]
-
-        assembled_data = chunk_manager.get_assembled_data(transfer_id)
-        if not assembled_data:
-            error_msg = f"No assembled data for transfer {transfer_id}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        metadata = chunk_manager.get_metadata(transfer_id)
-        model_id = metadata.get("model_id", "")
-        layer_name = metadata.get("layer_name", "")
-
-        if not model_id or not layer_name:
-            error_msg = f"Missing metadata for transfer {transfer_id}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        logger.info(f"Processing inference with assembled data")
-        
-        # Break the response into smaller pieces to avoid socket disconnection
-        try:
-            response = server.handle_inference(model_id, layer_name, assembled_data)
+            cmd: str = request["command"]
+            logger.info(f"[CONN:{conn_id}] Processing command: {cmd}")
             
-            # Clean up the transfer data before sending the response
-            chunk_manager.cleanup_transfer(transfer_id)
-            logger.info(f"Chunked inference completed")
-            
-            # Check if the response needs to be chunked
-            response_data, status_code = response
-            
-            if status_code == 200 and "encrypted_output" in response_data:
-                output_data = response_data["encrypted_output"]
-                
-                if chunk_manager.needs_chunking(output_data):
-                    logger.info(f"Response is large, sending as chunked response")
-                    
-                    resp_transfer_id, chunks = chunk_manager.create_transfer(output_data)
-                    
-                    # Store the chunks in the chunk manager for retrieval
-                    chunk_manager.register_transfer(resp_transfer_id, len(chunks))
-                    
-                    # Add each chunk to the transfer
-                    for chunk in chunks:
-                        chunk_manager.add_chunk(chunk)
-                    
-                    return {
-                        "chunked": True,
-                        "transfer_id": resp_transfer_id,
-                        "total_chunks": len(chunks),
-                    }, 200
-            
-            return response
-            
-        except Exception as e:
-            logger.exception(f"Error in inference processing: {e}")
-            return {"error": f"Processing error: {str(e)}"}, 500
-            
-    except Exception as e:
-        logger.exception(f"Error completing chunked inference: {e}")
-        return {"error": f"Failed to complete chunked inference: {str(e)}"}, 500
+            try:
+                if cmd == "upload_model":
+                    model_id = server.handle_upload_model_bytes(request["model_data"])
+                    _send_obj(conn, {"status": True, "model_id": model_id}, conn_id)
+                elif cmd == "get_model_structure":
+                    structure = server.handle_get_model_structure_simple(request["model_id"])
+                    _send_obj(conn, {"status": True, "structure": structure}, conn_id)
+                elif cmd == "inference":
+                    output = server.handle_inference_simple(
+                        request["model_id"], request["layer_name"], request["encrypted_input"]
+                    )
+                    _send_obj(conn, {"status": True, "encrypted_output": output}, conn_id)
+                else:
+                    _send_obj(conn, {"status": False, "error": f"unknown command: {cmd}"}, conn_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception(f"[CONN:{conn_id}] Error handling command {cmd}")
+                _send_obj(conn, {"status": False, "error": str(exc)}, conn_id)
+    finally:
+        conn.close()
+        logger.info("closed connection %s:%s", *addr)
 
 
-@sio.event
-async def get_response_chunk(sid, data):
-    """Handle request for a chunk of a chunked response"""
-    try:
-        transfer_id = data.get("transfer_id", "")
-        chunk_index = data.get("chunk_index", -1)
+# -----------------------------------------------------------------------------
+# Main entry‑point
+# -----------------------------------------------------------------------------
 
-        if not transfer_id or chunk_index < 0:
-            missing = []
-            if not transfer_id:
-                missing.append("transfer_id")
-            if chunk_index < 0:
-                missing.append("chunk_index")
-            error_msg = f"Missing required parameters: {', '.join(missing)}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        if sid not in chunk_managers:
-            error_msg = f"No chunk manager for client {sid}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 404
-
-        chunk_manager = chunk_managers[sid]
-
-        if transfer_id not in chunk_manager.transfers:
-            error_msg = f"No transfer found for {transfer_id}"
-            logger.error(error_msg)
-            return {"error": error_msg}, 404
-
-        transfer = chunk_manager.transfers[transfer_id]
-        chunks = transfer.get("chunks", {})
-        total_chunks = transfer.get("total_chunks", 0)
-
-        if chunk_index >= total_chunks or chunk_index not in chunks:
-            error_msg = f"Chunk {chunk_index} not available"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        return {
-            "transfer_id": transfer_id,
-            "chunk_index": chunk_index,
-            "total_chunks": total_chunks,
-            "data": chunks[chunk_index],
-        }, 200
-    except Exception as e:
-        logger.exception(f"Error retrieving response chunk: {e}")
-        return {"error": f"Failed to retrieve response chunk: {str(e)}"}, 500
-
-
-@sio.event
-async def cleanup_response_chunks(sid, data):
-    """Cleanup chunks for a completed response transfer"""
-    try:
-        transfer_id = data.get("transfer_id", "")
-
-        if not transfer_id:
-            error_msg = "Missing transfer_id"
-            logger.error(error_msg)
-            return {"error": error_msg}, 400
-
-        if sid not in chunk_managers:
-            return {"status": "not_found"}, 404
-
-        chunk_manager = chunk_managers[sid]
-        if chunk_manager.cleanup_transfer(transfer_id):
-            logger.info(f"Cleaned up transfer {transfer_id[:10]}")
-            return {"status": "cleaned"}, 200
-
-        return {"status": "not_found"}, 404
-    except Exception as e:
-        logger.exception(f"Error cleaning up chunks: {e}")
-        return {"error": f"Failed to clean up chunks: {str(e)}"}, 500
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Run a Supersayan server")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind")
+def main() -> None:  # noqa: D401
+    parser = argparse.ArgumentParser(description="Run Supersayan TCP server")
+    parser.add_argument("--host", default="127.0.0.1", help="interface to bind to")
+    parser.add_argument("--port", type=int, default=8000, help="TCP port")
     parser.add_argument(
         "--models-dir",
-        type=str,
         default="/tmp/supersayan/models",
-        help="Directory for storing models",
+        help="directory where uploaded models are stored",
     )
     args = parser.parse_args()
 
-    os.makedirs(args.models_dir, exist_ok=True)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    global server
-    server = SupersayanServer(storage_dir=args.models_dir)
+    srv = SupersayanServer(storage_dir=args.models_dir)
 
-    logger.info(f"Starting Socket.IO server on {args.host}:{args.port}")
-    logger.info(f"Using models directory: {args.models_dir}")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((args.host, args.port))
+        s.listen()
+        logger.info("Supersayan server listening on %s:%s", args.host, args.port)
 
-    uvicorn.run(
-        app,
-        host=args.host,
-        port=args.port,
-        timeout_keep_alive=300,  # 5 minute keep-alive timeout (increased)
-        limit_concurrency=5,  # Limit concurrent connections to avoid memory issues
-        limit_max_requests=None,  # No limit on max requests
-        ws_max_size=1024 * 1024 * 1024,  # 1GB max websocket message size
-        ws_ping_interval=60,  # 1 minute ping interval
-        ws_ping_timeout=300,  # 5 minute ping timeout
-    )
+        while True:
+            conn, addr = s.accept()
+            thread = threading.Thread(target=_handle_client, args=(conn, addr, srv), daemon=True)
+            thread.start()
 
 
 if __name__ == "__main__":

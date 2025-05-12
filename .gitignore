@@ -193,3 +193,6 @@ models/
 .benchmarks/
 
 **/.claude/settings.local.json
+
+
+prof/

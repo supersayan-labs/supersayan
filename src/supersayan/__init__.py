@@ -12,9 +12,6 @@ This package provides:
 from .core import encryption, keygen, bindings, operations
 from .nn import layers
 from .nn.convert import (
-    convert_to_pure_supersayan,
-    convert_to_hybrid_supersayan,
-    convert_model,
     SupersayanModel,
     ModelType,
 )
@@ -25,9 +22,6 @@ __all__ = [
     "bindings",
     "operations",
     "layers",
-    "convert_to_pure_supersayan",
-    "convert_to_hybrid_supersayan",
-    "convert_model",
     "SupersayanModel",
     "ModelType",
 ]

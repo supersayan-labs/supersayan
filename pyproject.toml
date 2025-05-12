@@ -24,7 +24,6 @@ dependencies = [
     "websocket-client>=1.8.0",
     "torchsummary>=1.5.1",
     "black>=25.1.0",
-    "gevent>=25.4.2",
     "scalene>=1.5.51",
     "python-socketio>=5.13.0",
     "simple-websocket>=1.1.0",
@@ -41,7 +40,6 @@ packages = ["supersayan"]
 package-data = {"supersayan" = ["py.typed"]}
 
 [tool.uv]
-editable-packages = ["supersayan"]
 
 [tool.uv.sources]
 supersayan = { path = ".", editable = true }
