@@ -93,22 +93,6 @@ def _send_obj(sock: socket.socket, obj: Any, conn_id: int = None) -> None:
     if isinstance(obj, dict):
         obj["_conn_id"] = conn_id
         
-    import numpy as np
-    # 1) Serialize content, hash it
-    if 'encrypted_output' in obj:
-        encrypted_output = obj.get('encrypted_output')
-        structure_info = f"Type: {type(encrypted_output)}, "
-        current_level = encrypted_output
-        level = 0
-        while isinstance(current_level, (list, np.ndarray)):
-            structure_info += f"Level {level} type: {type(current_level)}, "
-            if len(current_level) > 0:
-                current_level = current_level[0]
-            else:
-                break
-            level += 1
-        structure_info += f"Final element type: {type(current_level)}"
-        logger.info(f"Encrypted output structure: {structure_info}")
     payload_content = pickle.dumps(obj)
     content_hash = hashlib.md5(payload_content).hexdigest()
 

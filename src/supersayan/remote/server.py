@@ -12,6 +12,7 @@ import os
 import pickle
 import uuid
 from typing import Any, Dict, List
+from supersayan.core.types import convert_to_serializable
 
 import torch
 from torch.nn.modules.container import ModuleDict
@@ -123,4 +124,7 @@ class SupersayanServer:
             raise ValueError(f"layer {layer_name!r} not found in model {model_id}")
         layer = getattr(model, layer_name)
         encrypted_output = layer(encrypted_input)
-        return encrypted_output
+        
+        serializable_output = convert_to_serializable(encrypted_output)
+        
+        return serializable_output

@@ -14,6 +14,8 @@ import socket
 import struct
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 from supersayan.core.bindings import bytes_to_jlwrap
+from supersayan.core.types import convert_from_serializable
+from supersayan.core.types import SerializableArray
 import numpy as np
 import torch
 import torch.nn as nn
@@ -249,7 +251,10 @@ class SupersayanClient(SupersayanModel):
             "encrypted_input": encrypted_input,
         }
         resp = self._send_request(request)
-        return resp["encrypted_output"]
+        temp = convert_from_serializable(resp["encrypted_output"])
+        if isinstance(temp, SerializableArray):
+            return temp.array
+        return temp
 
     # ------------------------------------------------------------------
     # Hybrid forward pass
