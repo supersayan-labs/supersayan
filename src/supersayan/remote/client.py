@@ -13,7 +13,7 @@ import pickle
 import socket
 import struct
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
-
+from supersayan.core.bindings import bytes_to_jlwrap
 import numpy as np
 import torch
 import torch.nn as nn
