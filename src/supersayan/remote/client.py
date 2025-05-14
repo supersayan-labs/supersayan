@@ -1,45 +1,40 @@
 # client.py
-"""Simple TCP client for hybrid SuperSayan inference.
-
-Replaces the previous Socket.IO implementation with a lightweight TCP
-protocol that uses pickle for (de)serialisation.
-"""
+# ------------------------------
+# Simple TCP client for hybrid SuperSayan inference.
+# ------------------------------
 from __future__ import annotations
 
 import hashlib
-import io
 import logging
 import pickle
 import socket
 import struct
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
-from supersayan.core.bindings import bytes_to_jlwrap
-from supersayan.core.types import convert_from_serializable
-from supersayan.core.types import SerializableArray
+from typing import Any, Dict, Optional, Union, List, Type, cast
+
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.nn.modules.container import ModuleDict
 
+from supersayan.core.bindings import bytes_to_jlwrap
 from supersayan.core.encryption import decrypt, encrypt
 from supersayan.core.keygen import generate_secret_key
+from supersayan.core.types import SerializableArray, convert_from_serializable
 from supersayan.nn.convert import ModelType, SupersayanModel
 
 logger = logging.getLogger(__name__)
 
-
-# -----------------------------------------------------------------------------
-# TCP helpers
-# -----------------------------------------------------------------------------
-_HEADER_FMT = "!Q"  # unsigned long long – 8‑byte payload length
+# Constants for chunking
+_CHUNK_SIZE = 50 * 1024 * 1024
+_HEADER_FMT = "!Q"
 _HEADER_SIZE = struct.calcsize(_HEADER_FMT)
+_COUNT_FMT = "!I"
+_COUNT_SIZE = struct.calcsize(_COUNT_FMT)
 
-# Connection counter for tracking requests/responses
 _connection_counter = 0
+_REQUEST_TIMEOUT = 600  # seconds
 
 
 def _recv_exact(sock: socket.socket, n: int) -> bytes:
-    """Receive *exactly* ``n`` bytes from *sock* (blocking)."""
     data = bytearray()
     while len(data) < n:
         chunk = sock.recv(n - len(data))
@@ -49,102 +44,75 @@ def _recv_exact(sock: socket.socket, n: int) -> bytes:
     return bytes(data)
 
 
+def _recv_obj(sock: socket.socket) -> Any:
+    # Read total payload size
+    total_size_bytes = _recv_exact(sock, _HEADER_SIZE)
+    total_size = struct.unpack(_HEADER_FMT, total_size_bytes)[0]
+    # Read packet count
+    count_bytes = _recv_exact(sock, _COUNT_SIZE)
+    packet_count = struct.unpack(_COUNT_FMT, count_bytes)[0]
+    # Read protocol-level conn_id
+    conn_id_bytes = _recv_exact(sock, _HEADER_SIZE)
+    conn_id = struct.unpack(_HEADER_FMT, conn_id_bytes)[0]
+
+    logger.info(f"[CONN:{conn_id}] Receiving object: {total_size} bytes in {packet_count} packets")
+
+    # Collect chunks
+    payload = bytearray()
+    for idx in range(1, packet_count + 1):
+        size_bytes = _recv_exact(sock, _HEADER_SIZE)
+        chunk_size = struct.unpack(_HEADER_FMT, size_bytes)[0]
+        logger.info(f"[CONN:{conn_id}] Receiving packet {idx}/{packet_count}: {chunk_size} bytes")
+        payload.extend(_recv_exact(sock, chunk_size))
+
+    # Verify length
+    if len(payload) != total_size:
+        raise ValueError(f"[CONN:{conn_id}] Length mismatch: expected {total_size} bytes, got {len(payload)}")
+
+    # Read 32-byte ASCII MD5 trailer
+    expected_hash = _recv_exact(sock, 32).decode('ascii')
+    calc_hash = hashlib.md5(payload).hexdigest()
+    logger.info(f"[CONN:{conn_id}] Trailer hash: sent={expected_hash} calc={calc_hash}")
+    if expected_hash != calc_hash:
+        raise ValueError(f"[CONN:{conn_id}] Hash mismatch: sent={expected_hash} vs calc={calc_hash}")
+
+    obj = pickle.loads(payload)
+    return obj
+
+
 def _send_obj(sock: socket.socket, obj: Any) -> int:
-    """pickle.dumps *obj* and stream it preceded by its length header."""
     global _connection_counter
     _connection_counter += 1
     conn_id = _connection_counter
 
-    # Tag with connection ID if dict
     if isinstance(obj, dict):
         obj["_conn_id"] = conn_id
 
-    # 1) Serialize the object *without* a _hash
-    payload_content = pickle.dumps(obj)
-    payload_size0 = len(payload_content)
-
-    # 2) Compute its MD5
-    content_hash = hashlib.md5(payload_content).hexdigest()
-
-    # 3) Inject that hash into the dict
-    if isinstance(obj, dict):
-        obj["_hash"] = content_hash
-
-    # 4) Serialize final payload (with _hash inside)
     payload = pickle.dumps(obj)
-    payload_size = len(payload)
+    total_size = len(payload)
+    chunks = [payload[i : i + _CHUNK_SIZE] for i in range(0, total_size, _CHUNK_SIZE)]
+    total_packets = len(chunks)
 
-    logger.info(
-        f"[CONN:{conn_id}] Sending object: "
-        f"size={payload_size} bytes, "
-        f"content_hash={content_hash}"
-    )
+    # Compute MD5
+    content_hash = hashlib.md5(payload).hexdigest()
+    logger.info(f"[CONN:{conn_id}] Sending {total_size} bytes in {total_packets} packets, MD5={content_hash}")
 
-    # 5) Send header + payload
-    sock.sendall(struct.pack(_HEADER_FMT, payload_size))
-    sock.sendall(payload)
+    # Send headers
+    sock.sendall(struct.pack(_HEADER_FMT, total_size))
+    sock.sendall(struct.pack(_COUNT_FMT, total_packets))
+    sock.sendall(struct.pack(_HEADER_FMT, conn_id))
 
+    # Send chunks
+    for idx, chunk in enumerate(chunks, start=1):
+        chunk_size = len(chunk)
+        logger.info(f"[CONN:{conn_id}] Sending packet {idx}/{total_packets}: {chunk_size} bytes")
+        sock.sendall(struct.pack(_HEADER_FMT, chunk_size))
+        sock.sendall(chunk)
+
+    # Send 32-byte ASCII hex MD5 trailer
+    sock.sendall(content_hash.encode('ascii'))
     return conn_id
 
-
-def _recv_obj(sock: socket.socket) -> Any:
-    """Read a length-prefixed pickle payload, verify hash, and return the object."""
-    size_bytes = _recv_exact(sock, _HEADER_SIZE)
-    size = struct.unpack(_HEADER_FMT, size_bytes)[0]
-
-    payload = _recv_exact(sock, size)
-    actual_length = len(payload)
-    if actual_length != size:
-        logger.error(f"Length mismatch: Expected {size} bytes but received {actual_length} bytes")
-        raise ValueError(f"Length mismatch: Expected {size} bytes but received {actual_length} bytes")
-
-    # Compute MD5 of exactly what we received
-    received_hash = hashlib.md5(payload).hexdigest()
-
-    # Unpickle
-    obj = pickle.loads(payload)
-
-    conn_id = "unknown"
-    if isinstance(obj, dict) and "_hash" in obj:
-        # first preserve the sent hash & conn_id
-        sent_hash = obj["_hash"]
-        conn_id   = obj.get("_conn_id", "unknown")
-
-        # recompute MD5 over everything *except* _hash (but still including _conn_id)
-        calc_hash = hashlib.md5(
-            pickle.dumps({k: v for k, v in obj.items() if k != "_hash"})
-        ).hexdigest()
-
-        logger.info(
-            f"[CONN:{conn_id}] Received object: "
-            f"size={actual_length} bytes, "
-            f"sent_hash={sent_hash}, "
-            f"calc_hash={calc_hash}"
-        )
-        if sent_hash != calc_hash:
-            logger.warning(f"[CONN:{conn_id}] Hash mismatch!")
-
-        # *now* strip our metadata so downstream code sees only the payload
-        obj.pop("_hash", None)
-        obj.pop("_conn_id", None)
-
-    elif isinstance(obj, dict):
-        # no hash present
-        conn_id = obj.pop("_conn_id", "unknown")
-        logger.info(
-            f"[CONN:{conn_id}] Received object (no hash): "
-            f"size={actual_length} bytes, "
-            f"recv_hash={received_hash}"
-        )
-
-    else:
-        logger.info(
-            f"[CONN:unknown] Received non-dict object: "
-            f"size={actual_length} bytes, "
-            f"recv_hash={received_hash}"
-        )
-
-    return obj
 
 # -----------------------------------------------------------------------------
 # SuperSayan TCP client
