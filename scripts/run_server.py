@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 from supersayan.remote.server import SupersayanServer
 
 # Constants for chunking
-_CHUNK_SIZE = 50 * 1024 * 1024  # 50 MiB
+_CHUNK_SIZE = 500 * 1024 * 1024  # 50 MiB
 _HEADER_FMT = "!Q"               # unsigned long long – 8-byte integer
 _HEADER_SIZE = struct.calcsize(_HEADER_FMT)
 _COUNT_FMT = "!I"                # unsigned int – 4-byte integer for packet count

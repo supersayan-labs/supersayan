@@ -19,12 +19,12 @@ from supersayan.core.bindings import bytes_to_jlwrap
 from supersayan.core.encryption import decrypt, encrypt
 from supersayan.core.keygen import generate_secret_key
 from supersayan.core.types import SerializableArray, convert_from_serializable
-from supersayan.nn.convert import ModelType, SupersayanModel
+from supersayan.nn.convert import ModelType, SupersayanModel, LAYER_MAPPING
 
 logger = logging.getLogger(__name__)
 
 # Constants for chunking
-_CHUNK_SIZE = 50 * 1024 * 1024
+_CHUNK_SIZE = 500 * 1024 * 1024
 _HEADER_FMT = "!Q"
 _HEADER_SIZE = struct.calcsize(_HEADER_FMT)
 _COUNT_FMT = "!I"
@@ -225,16 +225,66 @@ class SupersayanClient(SupersayanModel):
         return temp
 
     # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+    def _convert_module(self, module: nn.Module) -> nn.Module:
+        """Convert a PyTorch module to its Supersayan counterpart."""
+        module_type = type(module)
+        if module_type in LAYER_MAPPING:
+            cls = LAYER_MAPPING[module_type]
+            if isinstance(module, nn.Linear):
+                out = cls(module.in_features, module.out_features, bias=module.bias is not None)
+                out.weight.data.copy_(module.weight.data)
+                if module.bias is not None:
+                    out.bias.data.copy_(module.bias.data)
+                return out
+            if isinstance(module, nn.Conv2d):
+                out = cls(
+                    module.in_channels,
+                    module.out_channels,
+                    module.kernel_size,
+                    module.stride,
+                    module.padding,
+                    module.dilation,
+                    module.groups,
+                    bias=module.bias is not None,
+                )
+                out.weight.data.copy_(module.weight.data)
+                if module.bias is not None:
+                    out.bias.data.copy_(module.bias.data)
+                return out
+        if isinstance(module, nn.Sequential):
+            return nn.Sequential(*(self._convert_module(m) for m in module))
+        raise ValueError(f"module type {module_type} not supported")
+
+    # ------------------------------------------------------------------
     # Hybrid forward pass
     # ------------------------------------------------------------------
     def _hybrid_forward_module(self, prefix: str, module: nn.Module, x: torch.Tensor) -> torch.Tensor:  # noqa: D401
         """Recurse through *module*; offload FHE layers, run others locally."""
         full_name = prefix
 
-        # If this module is to be executed in FHE – encrypt → remote → decrypt
+        # If this module is to be executed in FHE based on its name
         if full_name in self.fhe_module_names:
             enc_in = encrypt(x, self.secret_key)
             enc_out = self._process_layer(full_name, enc_in)
+            dec = decrypt(enc_out, self.secret_key)
+            return torch.tensor(dec, dtype=x.dtype, device=x.device)
+        
+        # If this module should be executed in FHE based on its type
+        if self.using_module_types and any(isinstance(module, t) for t in self.fhe_module_types):
+            # Create a safe name for this module if not already in fhe_module_names
+            safe_name = full_name.replace(".", "_")
+            if safe_name not in self.fhe_module_names:
+                # Add this module to the modules_dict and fhe_module_names
+                self.modules_dict[safe_name] = self._convert_module(module)
+                self.fhe_module_names.append(safe_name)
+                # Upload model again since we added a new module
+                self.uploaded = False
+                self._upload_model_if_needed()
+            
+            enc_in = encrypt(x, self.secret_key)
+            enc_out = self._process_layer(safe_name, enc_in)
             dec = decrypt(enc_out, self.secret_key)
             return torch.tensor(dec, dtype=x.dtype, device=x.device)
 
