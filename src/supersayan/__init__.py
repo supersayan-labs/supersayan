@@ -9,7 +9,7 @@ This package provides:
   - Client-server architecture for distributed execution of encrypted models.
 """
 
-from .core import encryption, keygen, bindings, operations
+from .core import encryption, keygen, bindings
 from .nn import layers
 from .nn.convert import (
     SupersayanModel,
@@ -20,7 +20,6 @@ __all__ = [
     "encryption",
     "keygen",
     "bindings",
-    "operations",
     "layers",
     "SupersayanModel",
     "ModelType",

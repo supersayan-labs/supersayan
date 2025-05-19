@@ -8,16 +8,12 @@ This module provides:
   - Homomorphic operations (addition, dot product, etc.).
 """
 
-from .bindings import SupersayanTFHE
 from .encryption import encrypt, decrypt
 from .keygen import generate_secret_key
-from .operations import add_lwe, dot_product_lwe
 
 __all__ = [
     "SupersayanTFHE",
     "encrypt",
     "decrypt",
-    "generate_secret_key",
-    "add_lwe",
-    "dot_product_lwe",
+    "generate_secret_key"
 ]

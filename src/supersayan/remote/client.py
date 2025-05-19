@@ -15,7 +15,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from supersayan.core.bindings import bytes_to_jlwrap
 from supersayan.core.encryption import decrypt, encrypt
 from supersayan.core.keygen import generate_secret_key
 from supersayan.core.types import SerializableArray, convert_from_serializable
