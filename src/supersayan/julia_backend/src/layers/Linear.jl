@@ -1,9 +1,12 @@
 module Linear
 
 using PyCall
-import ...SupersayanTFHE.Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
-import ...SupersayanTFHE.Operations: add, mult, dot_product
 using Base.Threads
+using LinearAlgebra: BLAS
+
+# Import from parent module
+import SupersayanTFHE.Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
+import SupersayanTFHE.Operations: add, mult, dot_product
 
 export linear_forward
 

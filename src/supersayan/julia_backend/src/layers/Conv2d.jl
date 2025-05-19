@@ -5,9 +5,9 @@ using PyCall
 using Base.Threads
 using LinearAlgebra: BLAS
 
-# using PyCall: PyObject
-import Main.SupersayanTFHE.Types:      LWE, convert_pyobjects_to_lwe, convert_pyobjects_to_lwes
-import Main.SupersayanTFHE.Operations: add, mult, dot_product
+# Import from parent module
+import SupersayanTFHE.Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
+import SupersayanTFHE.Operations: add, mult, dot_product
 
 export conv2d_forward
 
@@ -22,7 +22,7 @@ export conv2d_forward
                    groups::Int,
                    bias::Union{Vector{<:Real},Nothing}=nothing) where T <: Union{LWE,PyObject}
 
-Perform a “naïve” sliding-window 2D convolution on LWE ciphertexts:
+Perform a "naïve" sliding-window 2D convolution on LWE ciphertexts:
 
 - `cipher_vec` is a flat Vector of length N*C_in*H*W (row-major).
 - `weight` is plain-text Float kernel of size (C_out, C_in/groups, kh, kw).

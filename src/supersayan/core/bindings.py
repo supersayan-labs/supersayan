@@ -1,23 +1,17 @@
 import os
 import logging
-from julia import Julia, Main
+from juliacall import Main as jl
 
 logger = logging.getLogger(__name__)
 
-try:
-    # Initialize Julia runtime
-    logger.info("Initializing Julia runtime")
-    Julia(compiled_modules=False, threads=True)
-    logger.info("Julia runtime initialized")
-except Exception as e:
-    logger.error("Failed to initialize Julia: %s", e)
-    raise
-
 current_dir = os.path.dirname(os.path.abspath(__file__))
-julia_file = os.path.join(current_dir, "..", "julia_backend", "SupersayanTFHE.jl")
-julia_file = os.path.normpath(julia_file)
-logger.info("Including Julia backend from: %s", julia_file)
-Main.include(julia_file)
+julia_package_dir = os.path.join(current_dir, "..", "julia_backend")
+julia_package_dir = os.path.normpath(julia_package_dir)
+logger.info("Loading Julia package from: %s", julia_package_dir)
 
-# Get Julia module in Main namespace
-SupersayanTFHE = Main.SupersayanTFHE
+# FIXME: auto install the julia dependencies
+# Refer to: cd /Users/tomjurien/Documents/Projects/SaCS/supersayan/src/supersayan/julia_backend && julia -e 'using Pkg; Pkg.activate("."); Pkg.instantiate(); Pkg.resolve()'
+jl.seval(f'push!(LOAD_PATH, "{julia_package_dir}")')
+jl.seval("using SupersayanTFHE")
+
+SupersayanTFHE = jl.SupersayanTFHE
