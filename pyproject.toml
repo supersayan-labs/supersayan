@@ -27,6 +27,7 @@ dependencies = [
     "scalene>=1.5.51",
     "python-socketio>=5.13.0",
     "simple-websocket>=1.1.0",
+    "juliacall>=0.9.25",
 ]
 
 classifiers = [

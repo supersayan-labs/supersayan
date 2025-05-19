@@ -21,8 +21,3 @@ Main.include(julia_file)
 
 # Get Julia module in Main namespace
 SupersayanTFHE = Main.SupersayanTFHE
-
-print("wallah")
-logger.info("wallah")
-
-__all__ = ["SupersayanTFHE"]
