@@ -78,7 +78,7 @@ def decrypt_from_lwes(
 
 if __name__ == "__main__":
     key = SupersayanTFHE.Encryption.generate_key()
-    mu = np.array([[1.2] * 1] * 1).astype(np.float32)
+    mu = np.linspace(0, 1, 11, dtype=np.float32)
     encrypted = encrypt_to_lwes(mu, key)
     decrypted = decrypt_from_lwes(encrypted, key)
     print(mu == decrypted)
