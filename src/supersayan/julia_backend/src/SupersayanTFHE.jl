@@ -1,14 +1,15 @@
 module SupersayanTFHE
 
-include("Constants.jl")
 include("Types.jl")
+include("Constants.jl")
 include("Encryption.jl")
-include("Operations.jl")
+# include("Operations.jl")
 
-export Constants, Types, Encryption, Operations
+# Re-export submodules
+export Types, Constants, Encryption
 
-include("layers/Layers.jl")
+# include("layers/Layers.jl")
 
-export Layers
+# export Layers
 
 end 

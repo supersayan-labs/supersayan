@@ -1,35 +1,35 @@
 module Types
 
-export LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
+using PythonCall
 
-using PyCall
+const A = AbstractArray{Float32}
+const B = Float32
+const LWE = AbstractArray{Float32}
+const MU = Float32
+const SIGMA = Float32 
+const KEY = AbstractArray{Float32}
+const P = Int32
 
 """
-    struct LWE
+    extract_lwe(x::LWE)::Tuple{A, B}
 
-An LWE ciphertext consists of a mask (a vector of Float64) and a masked value (Float64).
+Extract mask and masked value from an LWE ciphertext.
+Returns tuple of (mask, masked value).
 """
-struct LWE
-    mask::Vector{Float64}
-    masked::Float64
+function extract_lwe(x::LWE)::Tuple{A, B}
+    return x[2:end], x[1]
 end
 
 """
-    convert_pyobject_to_lwe(py_obj::PyObject)
+    pack_lwe(x::A, y::B)::LWE
 
-Converts a Python object with mask and masked attributes to an LWE struct.
+Pack mask and masked value into an LWE ciphertext.
+Returns the combined LWE vector.
 """
-function convert_pyobject_to_lwe(py_obj::PyObject)
-    return LWE(py_obj.mask, py_obj.masked)
+function pack_lwe(x::A, y::B)::LWE
+    return [y; x]
 end
 
-"""
-    convert_pyobjects_to_lwes(py_objs::Vector{PyObject})
+export A, B, LWE, MU, SIGMA, KEY, P, extract_lwe, pack_lwe
 
-Converts a vector of Python objects to a vector of LWE structs.
-"""
-function convert_pyobjects_to_lwes(py_objs::Vector{PyObject})
-    return [convert_pyobject_to_lwe(obj) for obj in py_objs]
-end
-
-end
+end 

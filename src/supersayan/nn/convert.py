@@ -15,7 +15,6 @@ from typing import Dict, List, Optional, Type, Union, cast
 import torch
 import torch.nn as nn
 from supersayan.core.keygen import generate_secret_key
-from supersayan.core.encryption import decrypt, encrypt
 from supersayan.nn.layers import Conv2d, Linear
 
 logger = logging.getLogger(__name__)
