@@ -54,13 +54,17 @@ def decrypt_from_lwes(
 
     Returns:
         np.ndarray[MU]: A numpy array of float32 values with the same shape as the input
-
-    Raises:
-        RuntimeError: If Julia decryption fails
     """
-    original_shape = ciphertexts.shape
+    # Ensure the input is a NumPy ndarray – Julia `PyArray` objects do not fully
+    # mimic ndarray and their `reshape` signature differs. Converting with
+    # `np.asarray` guarantees we get the familiar semantics while incurring only
+    # a cheap view/copy.
+    ciphertexts_np = np.asarray(ciphertexts)
 
-    ciphertexts_flattened = ciphertexts.reshape(-1, ciphertexts.shape[-1])
+    original_shape = ciphertexts_np.shape
+
+    # Flatten the batch-dimension(s) but keep the LWE dimension intact.
+    ciphertexts_flattened = np.reshape(ciphertexts_np, (-1, ciphertexts_np.shape[-1]))
    
     if p is not None:
         decrypted_values = SupersayanTFHE.Encryption.decrypt_from_lwes(
@@ -75,17 +79,3 @@ def decrypt_from_lwes(
     decrypted_np_array = np.array(decrypted_values).reshape(original_shape[:-1])
 
     return decrypted_np_array
-
-if __name__ == "__main__":
-    key = SupersayanTFHE.Encryption.generate_key()
-    # mu = np.linspace(0, 1, 11, dtype=np.float32)
-    # encrypted = encrypt_to_lwes(mu, key)
-    # decrypted = decrypt_from_lwes(encrypted, key)
-    # print(mu == decrypted)
-    # print(mu)
-    # print(decrypted)
-
-    encrypted = encrypt_to_lwes(np.array(0.1), key)
-    added = SupersayanTFHE.Operations.add(encrypted, np.float32(0.1))
-    decrypted = decrypt_from_lwes(added, key)
-    print(decrypted)

@@ -5,6 +5,7 @@ using PythonCall
 const A = AbstractArray{Float32}
 const B = Float32
 const LWE = AbstractArray{Float32}
+const LWE_ARRAY = AbstractMatrix{Float32}
 const MU = Float32
 const SIGMA = Float32 
 const KEY = AbstractArray{Float32}

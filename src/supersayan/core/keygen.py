@@ -1,7 +1,8 @@
 from .bindings import SupersayanTFHE
+from .types import KEY
 
 
-def generate_secret_key() -> list[int]:
+def generate_secret_key() -> KEY:
     """
     Generate a secret LWE key using the Julia backend.
     Returns the key as a Python list.
@@ -9,6 +10,4 @@ def generate_secret_key() -> list[int]:
     Returns:
         list[int]: The secret key as a list of integers
     """
-    key = SupersayanTFHE.Encryption.generate_key()
-
-    return list(key)
+    return SupersayanTFHE.Encryption.generate_key()

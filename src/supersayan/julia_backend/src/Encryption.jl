@@ -4,7 +4,7 @@ using Random, LinearAlgebra
 using PythonCall
 
 import SupersayanTFHE.Constants
-import SupersayanTFHE.Types: LWE, A, B, MU, SIGMA, KEY, P, pack_lwe, extract_lwe
+import SupersayanTFHE.Types: LWE, LWE_ARRAY, A, B, MU, SIGMA, KEY, P, pack_lwe, extract_lwe
 
 """
 Map a Float32 onto the signed torus (-0.5, 0.5]
@@ -41,8 +41,15 @@ end
 """
 Encrypt an array of messages to LWE ciphertexts
 """
-function encrypt_to_lwes(mus::AbstractArray{MU}, key::KEY, sigma::SIGMA=Constants.sigma)::AbstractArray{LWE}
-    return [encrypt_to_lwe(m, key, sigma) for m in mus]
+function encrypt_to_lwes(mus::AbstractArray{MU}, key::KEY, sigma::SIGMA = Constants.sigma)::LWE_ARRAY
+    n  = length(key) + 1
+    ct = Matrix{Float32}(undef, length(mus), n)
+    
+    for (i, mu) in enumerate(mus)
+        ct[i, :] .= encrypt_to_lwe(mu, key, sigma)
+    end
+
+    return ct
 end
 
 """
@@ -58,7 +65,7 @@ end
 """
 Decrypt a batch of LWE ciphertexts, returning an array of Float32 in [0,1)
 """
-function decrypt_from_lwes(ciphertexts::AbstractMatrix{Float32}, key::KEY, p::P=Constants.p)
+function decrypt_from_lwes(ciphertexts::LWE_ARRAY, key::KEY, p::P=Constants.p)::AbstractArray{MU}
     return [decrypt_from_lwe(view(ciphertexts, i, :), key, p) for i in 1:size(ciphertexts, 1)]
 end
 
