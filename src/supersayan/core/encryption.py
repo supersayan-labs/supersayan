@@ -19,7 +19,7 @@ def encrypt_to_lwes(
     Returns:
         np.ndarray[LWE]: An numpy array of LWE ciphertext objects
     """
-    original_shape = mu.shape
+    original_shape = mus.shape
 
     mus_flattened = mus.flatten()
 
@@ -78,9 +78,14 @@ def decrypt_from_lwes(
 
 if __name__ == "__main__":
     key = SupersayanTFHE.Encryption.generate_key()
-    mu = np.linspace(0, 1, 11, dtype=np.float32)
-    encrypted = encrypt_to_lwes(mu, key)
-    decrypted = decrypt_from_lwes(encrypted, key)
-    print(mu == decrypted)
-    print(mu)
+    # mu = np.linspace(0, 1, 11, dtype=np.float32)
+    # encrypted = encrypt_to_lwes(mu, key)
+    # decrypted = decrypt_from_lwes(encrypted, key)
+    # print(mu == decrypted)
+    # print(mu)
+    # print(decrypted)
+
+    encrypted = encrypt_to_lwes(np.array(0.1), key)
+    added = SupersayanTFHE.Operations.add(encrypted, np.float32(0.1))
+    decrypted = decrypt_from_lwes(added, key)
     print(decrypted)

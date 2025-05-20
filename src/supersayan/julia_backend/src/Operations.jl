@@ -1,248 +1,201 @@
 module Operations
 
-import ..Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
-using PyCall
+# -----------------------------------------------------------------------------
+# Imports and exports
+# -----------------------------------------------------------------------------
+
+import ..Types: LWE, pack_lwe, extract_lwe
+
 using Base.Threads
 using LinearAlgebra: BLAS
 
 export add, mult, dot_product, batch_dot_product, batch_add
 
-# Set BLAS threads to match Julia threads for optimal performance
+# Match BLAS threads to Julia threads for maximum throughput
 BLAS.set_num_threads(Threads.nthreads())
 
-"""
-    add(lhs::Vector{T}, rhs::Vector{T}) where T <: Union{LWE, PyObject}
+# -----------------------------------------------------------------------------
+# Convenience helpers
+# -----------------------------------------------------------------------------
 
-Elementwise addition of two arrays of LWE ciphertexts.
-Optimized with multithreading for large arrays.
 """
-function add(lhs::Vector{T}, rhs::Vector{T}) where T <: Union{LWE, PyObject}
-    if length(lhs) != length(rhs)
-        throw(ArgumentError("Ciphertext arrays must have the same length"))
+    _add_masks!(dst, src, α = 1f0)
+
+In‑place add `α*src` to `dst`.  `dst` is modified and returned.
+"""
+@inline function _add_masks!(dst::AbstractVector{Float32}, src::AbstractVector{Float32}, α::Float32 = 1f0)
+    @inbounds @simd for i in eachindex(dst)
+        dst[i] += src[i] * α
     end
-    
-    # Convert PyObjects to LWE if needed
-    lhs_lwes = isa(first(lhs), PyObject) ? convert_pyobjects_to_lwes(lhs) : lhs
-    rhs_lwes = isa(first(rhs), PyObject) ? convert_pyobjects_to_lwes(rhs) : rhs
-    
-    result = Vector{LWE}(undef, length(lhs))
-    
-    # Use multithreading for large arrays
-    if length(lhs) > 100  # Threshold for parallelization
-        @threads for i in 1:length(lhs)
-            a_new = lhs_lwes[i].mask .+ rhs_lwes[i].mask
-            b_new = lhs_lwes[i].masked + rhs_lwes[i].masked
-            result[i] = LWE(a_new, b_new)
+    return dst
+end
+
+# -----------------------------------------------------------------------------
+# Element‑wise addition
+# -----------------------------------------------------------------------------
+
+"""
+    add(lhs::LWE, rhs::LWE) -> LWE
+
+Homomorphic addition of two ciphertexts.
+"""
+function add(lhs::LWE, rhs::LWE)::LWE
+    m₁, b₁ = extract_lwe(lhs)
+    m₂, b₂ = extract_lwe(rhs)
+    return pack_lwe(m₁ .+ m₂, b₁ + b₂)
+end
+
+"""
+    add(ciphertext::LWE, plaintext::Real) -> LWE
+
+Add a plaintext scalar to a ciphertext.
+"""
+function add(ct::LWE, μ::Real)::LWE
+    mask, masked = extract_lwe(ct)
+    return pack_lwe(mask, masked + Float32(μ))
+end
+
+"""
+    add(plaintext::Real, ciphertext::LWE) -> LWE
+
+Commutative form.
+"""
+add(μ::Real, ct::LWE) = add(ct, μ)
+
+# -----------------------------------------------------------------------------
+# Vectorised addition helpers
+# -----------------------------------------------------------------------------
+
+function _vector_op!(f, out::Vector{LWE}, a::Vector, b)
+    n = length(out)
+    if n > 100
+        @threads for i in 1:n
+            out[i] = f(a[i], b[i])
         end
     else
-        # Sequential for small arrays to avoid thread overhead
-        for i in 1:length(lhs)
-            a_new = lhs_lwes[i].mask .+ rhs_lwes[i].mask
-            b_new = lhs_lwes[i].masked + rhs_lwes[i].masked
-            result[i] = LWE(a_new, b_new)
+        for i in 1:n
+            out[i] = f(a[i], b[i])
         end
     end
-    
-    return result
+    return out
 end
 
 """
-    batch_add(lhs_batch::Vector{Vector{T}}, rhs_batch::Vector{Vector{T}}) where T <: Union{LWE, PyObject}
-
-Performs batch addition on multiple arrays in parallel.
+    add(lhs::Vector{LWE}, rhs::Vector{LWE}) -> Vector{LWE}
 """
-function batch_add(lhs_batch::Vector{Vector{T}}, rhs_batch::Vector{Vector{T}}) where T <: Union{LWE, PyObject}
-    if length(lhs_batch) != length(rhs_batch)
-        throw(ArgumentError("Batch arrays must have the same length"))
-    end
-    
-    result = Vector{Vector{LWE}}(undef, length(lhs_batch))
-    
-    @threads for batch_idx in 1:length(lhs_batch)
-        result[batch_idx] = add(lhs_batch[batch_idx], rhs_batch[batch_idx])
-    end
-    
-    return result
+function add(lhs::Vector{LWE}, rhs::Vector{LWE})
+    @assert length(lhs) == length(rhs) "Ciphertext arrays must have the same length"
+    out = Vector{LWE}(undef, length(lhs))
+    return _vector_op!(add, out, lhs, rhs)
 end
 
 """
-    add(lhs::Vector{T}, rhs::Real) where T <: Union{LWE, PyObject}
-
-Adds a scalar rhs to each LWE ciphertext in the array lhs.
-Optimized with multithreading for large arrays.
+    add(ciphertexts::Vector{LWE}, plaintext::Real) -> Vector{LWE}
 """
-function add(lhs::Vector{T}, rhs::Real) where T <: Union{LWE, PyObject}
-    # Convert PyObjects to LWE if needed
-    lhs_lwes = isa(first(lhs), PyObject) ? convert_pyobjects_to_lwes(lhs) : lhs
-    
-    result = Vector{LWE}(undef, length(lhs))
-    
-    # Use multithreading for large arrays
-    if length(lhs) > 100  # Threshold for parallelization
-        @threads for i in 1:length(lhs)
-            result[i] = LWE(lhs_lwes[i].mask, lhs_lwes[i].masked + rhs)
+function add(cts::Vector{LWE}, μ::Real)
+    out = Vector{LWE}(undef, length(cts))
+    if length(cts) > 100
+        @threads for i in eachindex(cts)
+            out[i] = add(cts[i], μ)
         end
     else
-        # Sequential for small arrays
-        for i in 1:length(lhs)
-            result[i] = LWE(lhs_lwes[i].mask, lhs_lwes[i].masked + rhs)
+        for i in eachindex(cts)
+            out[i] = add(cts[i], μ)
         end
     end
-    
-    return result
+    return out
 end
 
-"""
-    add(lhs::T, rhs::Real) where T <: Union{LWE, PyObject}
+add(μ::Real, cts::Vector{LWE}) = add(cts, μ)
 
-Adds a scalar rhs to a single LWE ciphertext lhs.
-Returns a single LWE ciphertext.
 """
-function add(lhs::T, rhs::Real) where T <: Union{LWE, PyObject}
-    # Convert PyObject to LWE if needed
-    lhs_lwe = isa(lhs, PyObject) ? convert_pyobject_to_lwe(lhs) : lhs
-    
-    # Add the scalar to the b term
-    return LWE(lhs_lwe.mask, lhs_lwe.masked + rhs)
+    batch_add(lhs_batch, rhs_batch) -> Vector{Vector{LWE}}
+"""
+function batch_add(lhs_batch::Vector{<:AbstractVector{LWE}},
+                   rhs_batch::Vector{<:AbstractVector{LWE}})
+    @assert length(lhs_batch) == length(rhs_batch) "Batches must have the same length"
+    n   = length(lhs_batch)
+    out = Vector{Vector{LWE}}(undef, n)
+
+    @threads for i in 1:n
+        out[i] = add(lhs_batch[i], rhs_batch[i])
+    end
+
+    return out
 end
 
-"""
-    mult(lhs::Vector{T}, scalar::Real) where T <: Union{LWE, PyObject}
+# -----------------------------------------------------------------------------
+# Scalar multiplication
+# -----------------------------------------------------------------------------
 
-Multiplies each LWE ciphertext in lhs by the scalar.
-Returns an array of LWE ciphertexts.
-Optimized with multithreading for large arrays.
 """
-function mult(lhs::Vector{T}, scalar::Real) where T <: Union{LWE, PyObject}
-    # Convert PyObjects to LWE if needed
-    lhs_lwes = isa(first(lhs), PyObject) ? convert_pyobjects_to_lwes(lhs) : lhs
-    
-    result = Vector{LWE}(undef, length(lhs))
-    
-    # Use multithreading for large arrays
-    if length(lhs) > 100  # Threshold for parallelization
-        @threads for i in 1:length(lhs)
-            # Use broadcast (dot operator) for vectorized operation
-            result[i] = LWE(lhs_lwes[i].mask .* scalar, lhs_lwes[i].masked * scalar)
+    mult(ciphertexts::Vector{LWE}, scalar::Real) -> Vector{LWE}
+
+Multiply an array of ciphertexts by a scalar.
+"""
+function mult(cts::Vector{LWE}, α::Real)
+    α32 = Float32(α)
+    out = Vector{LWE}(undef, length(cts))
+
+    if length(cts) > 100
+        @threads for i in eachindex(cts)
+            mask, masked = extract_lwe(cts[i])
+            out[i] = pack_lwe(mask .* α32, masked * α32)
         end
     else
-        # Sequential for small arrays
-        for i in 1:length(lhs)
-            result[i] = LWE(lhs_lwes[i].mask .* scalar, lhs_lwes[i].masked * scalar)
+        for i in eachindex(cts)
+            mask, masked = extract_lwe(cts[i])
+            out[i] = pack_lwe(mask .* α32, masked * α32)
         end
     end
-    
-    return result
+
+    return out
 end
 
-"""
-    dot_product(encrypted_vector::Vector{T}, plain_vector::AbstractVector{<:Real}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
+# -----------------------------------------------------------------------------
+# Encrypted–plaintext dot product
+# -----------------------------------------------------------------------------
 
-Computes the encrypted dot product between an encrypted vector and a plaintext vector.
-Optimized implementation that reduces allocations and uses SIMD where possible.
-
-Returns an LWE ciphertext representing the dot product.
 """
-function dot_product(encrypted_vector::Vector{T}, plain_vector::AbstractVector{<:Real}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
-    if length(encrypted_vector) != length(plain_vector)
-        throw(ArgumentError("Vectors must have the same length"))
-    end
-    
-    # Convert PyObjects to LWE
-    enc_lwes = isa(first(encrypted_vector), PyObject) ? convert_pyobjects_to_lwes(encrypted_vector) : encrypted_vector
-    z = isa(zero_ciphertext, PyObject) ? convert_pyobject_to_lwe(zero_ciphertext) : zero_ciphertext
-    
-    # Start with a copy of zero ciphertext
-    mask_length = length(z.mask)
-    result_mask = copy(z.mask)
-    result_masked = z.masked
-    
-    # Convert plain vector to Float64 for best performance
-    plain_vector_f64 = Vector{Float64}(plain_vector)
-    
-    # Process chunks of the input for cache efficiency
-    chunk_size = 16  # Tuned for typical CPU cache lines
-    num_chunks = div(length(enc_lwes), chunk_size)
-    remainder = rem(length(enc_lwes), chunk_size)
-    
-    # Process each chunk
-    for chunk in 1:num_chunks
-        start_idx = (chunk - 1) * chunk_size + 1
-        end_idx = chunk * chunk_size
-        
-        # Accumulate within chunk
-        for i in start_idx:end_idx
-            scalar = plain_vector_f64[i]
-            # Skip zero multiplications
-            if scalar != 0
-                # Accumulate directly into result
-                @simd for j in 1:mask_length
-                    result_mask[j] += enc_lwes[i].mask[j] * scalar
-                end
-                result_masked += enc_lwes[i].masked * scalar
-            end
+    dot_product(enc_vec, plain_vec, zero_cipher) -> LWE
+
+Compute ⟨enc_vec, plain_vec⟩ where the first argument is encrypted and the
+second is plaintext.
+"""
+function dot_product(enc_vec::AbstractVector{LWE},
+                     plain_vec::AbstractVector{<:Real},
+                     zero_cipher::LWE)::LWE
+    @assert length(enc_vec) == length(plain_vec) "Vectors must have the same length"
+
+    acc_mask, acc_b = extract_lwe(zero_cipher)  # copies, so we can mutate safely
+
+    @inbounds for (ct, μ) in zip(enc_vec, plain_vec)
+        μ32 = Float32(μ)
+        if μ32 != 0f0
+            mask, b = extract_lwe(ct)
+            _add_masks!(acc_mask, mask, μ32)
+            acc_b += b * μ32
         end
     end
-    
-    # Process remainder
-    if remainder > 0
-        start_idx = num_chunks * chunk_size + 1
-        for i in start_idx:length(enc_lwes)
-            scalar = plain_vector_f64[i]
-            if scalar != 0
-                @simd for j in 1:mask_length
-                    result_mask[j] += enc_lwes[i].mask[j] * scalar
-                end
-                result_masked += enc_lwes[i].masked * scalar
-            end
-        end
-    end
-    
-    return LWE(result_mask, result_masked)
-end
 
-# Add specialized method for SubArray to handle views correctly for encrypted_vector
-function dot_product(encrypted_vector::SubArray{T, 1}, plain_vector::AbstractVector{<:Real}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
-    # Convert SubArray to a regular Vector
-    enc_vec = collect(encrypted_vector)
-    # Then call the regular method
-    return dot_product(enc_vec, plain_vector, zero_ciphertext)
-end
-
-# Add specialized method for SubArray to handle views correctly for plain_vector
-function dot_product(encrypted_vector::Vector{T}, plain_vector::SubArray{<:Real, 1}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
-    # Convert SubArray to a regular Vector
-    plain_vec = collect(plain_vector)
-    # Then call the regular method
-    return dot_product(encrypted_vector, plain_vec, zero_ciphertext)
-end
-
-# Add specialized method for both SubArrays
-function dot_product(encrypted_vector::SubArray{T, 1}, plain_vector::SubArray{<:Real, 1}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
-    # Convert both SubArrays to regular Vectors
-    enc_vec = collect(encrypted_vector)
-    plain_vec = collect(plain_vector)
-    # Then call the regular method
-    return dot_product(enc_vec, plain_vec, zero_ciphertext)
+    return pack_lwe(acc_mask, acc_b)
 end
 
 """
-    batch_dot_product(encrypted_vectors::Vector{Vector{T}}, plain_vectors::Vector{Vector{<:Real}}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
-
-Computes multiple dot products in parallel.
+    batch_dot_product(enc_batches, plain_batches, zero_cipher) -> Vector{LWE}
 """
-function batch_dot_product(encrypted_vectors::Vector{Vector{T}}, plain_vectors::Vector{Vector{<:Real}}, zero_ciphertext::U) where {T <: Union{LWE, PyObject}, U <: Union{LWE, PyObject}}
-    if length(encrypted_vectors) != length(plain_vectors)
-        throw(ArgumentError("Batch arrays must have the same length"))
+function batch_dot_product(enc_batches::Vector{<:AbstractVector{LWE}},
+                           plain_batches::Vector{<:AbstractVector{<:Real}},
+                           zero_cipher::LWE)
+    @assert length(enc_batches) == length(plain_batches) "Batches must have the same length"
+    n   = length(enc_batches)
+    out = Vector{LWE}(undef, n)
+
+    @threads for i in 1:n
+        out[i] = dot_product(enc_batches[i], plain_batches[i], zero_cipher)
     end
-    
-    result = Vector{LWE}(undef, length(encrypted_vectors))
-    
-    @threads for batch_idx in 1:length(encrypted_vectors)
-        result[batch_idx] = dot_product(encrypted_vectors[batch_idx], plain_vectors[batch_idx], zero_ciphertext)
-    end
-    
-    return result
+
+    return out
 end
 
-end
+end # module
