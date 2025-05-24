@@ -5,11 +5,12 @@ using PythonCall
 const A = AbstractArray{Float32}
 const B = Float32
 const LWE = AbstractArray{Float32}
-const LWE_ARRAY = AbstractMatrix{Float32}
+const LWE_ARRAY = AbstractArray{Float32, 2}
 const MU = Float32
 const SIGMA = Float32 
 const KEY = AbstractArray{Float32}
 const P = Int32
+const LWE_BATCH = AbstractArray{Float32, 3}
 
 """
     extract_lwe(x::LWE)::Tuple{A, B}
@@ -32,5 +33,6 @@ function pack_lwe(x::A, y::B)::LWE
 end
 
 export A, B, LWE, MU, SIGMA, KEY, P, extract_lwe, pack_lwe
+export LWE_ARRAY, LWE_BATCH
 
 end 
