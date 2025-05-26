@@ -13,11 +13,11 @@ def encrypt_to_lwes(
 
     Args:
         mus: The numpy array of float32 values to encrypt
-        key: The encryption key
+        key: The secret key
         sigma: The noise parameter (optional)
 
     Returns:
-        np.ndarray[LWE]: An numpy array of LWE ciphertext objects
+        np.ndarray[LWE]: An numpy array of LWE ciphertext
     """
     original_shape = mus.shape
 
@@ -49,11 +49,11 @@ def decrypt_from_lwes(
 
     Args:
         ciphertexts: The numpy array of LWE ciphertexts to decrypt
-        key: The secret key for decryption
-        p: Precision parameter for decryption
+        key: The secret key
+        p: The precision parameter (optional)
 
     Returns:
-        np.ndarray[MU]: A numpy array of float32 values with the same shape as the input
+        np.ndarray[MU]: A numpy array of float32 values
     """
     ciphertexts_np = np.asarray(ciphertexts)
 

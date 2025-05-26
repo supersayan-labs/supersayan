@@ -8,6 +8,6 @@ def generate_secret_key() -> KEY:
     Returns the key as a Python list.
 
     Returns:
-        list[int]: The secret key as a list of integers
+        KEY: The secret key
     """
     return SupersayanTFHE.Encryption.generate_key()

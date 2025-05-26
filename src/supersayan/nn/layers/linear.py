@@ -11,16 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class Linear(nn.Module):
-    """
-    A PyTorch-style Linear layer redefined for encrypted data.
-
-    Instead of performing the normal dot product between input and weights,
-    it uses homomorphic operations provided by the Julia backend.
-
-    The forward pass expects a NumPy array of LWE ciphertexts of shape (batch, in_features).
-    """
-
-    def __init__(self, in_features: int, out_features: int, bias: bool = True):
+   def __init__(self, in_features: int, out_features: int, bias: bool = True):
         super(Linear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
