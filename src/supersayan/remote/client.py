@@ -1,9 +1,6 @@
 from __future__ import annotations
-import hashlib
 import logging
-import pickle
 import socket
-import struct
 from typing import Any, Dict, Optional, Union, List, Type, cast
 import torch
 import torch.nn as nn
@@ -11,145 +8,13 @@ import torch.nn as nn
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
 from supersayan.nn.convert import ModelType, SupersayanModel
+from supersayan.remote.socket_utils import (
+    recv_obj,
+    send_obj,
+    REQUEST_TIMEOUT,
+)
 
 logger = logging.getLogger(__name__)
-
-# Global connection counter
-_connection_counter = 0
-
-# Constants for chunking
-_CHUNK_SIZE = 500 * 1024 * 1024  # 500MB per packet
-_HEADER_FMT = "!Q"
-_HEADER_SIZE = struct.calcsize(_HEADER_FMT)
-_COUNT_FMT = "!I"
-_COUNT_SIZE = struct.calcsize(_COUNT_FMT)
-_REQUEST_TIMEOUT = 600  # seconds
-
-
-def _recv_exact(sock: socket.socket, n: int) -> bytes:
-    """
-    Receive exactly n bytes from the socket.
-
-    Args:
-        sock: The socket to receive from
-        n: The number of bytes to receive
-
-    Returns:
-        bytes: The bytes received
-    """
-    data = bytearray()
-
-    while len(data) < n:
-        chunk = sock.recv(n - len(data))
-
-        if not chunk:
-            raise ConnectionError("connection closed while receiving data")
-        data.extend(chunk)
-
-    return bytes(data)
-
-
-def _recv_obj(sock: socket.socket) -> Any:
-    """
-    Receive an object from the socket.
-
-    Args:
-        sock: The socket to receive from
-
-    Returns:
-        Any: The object received
-    """
-    # Read total payload size
-    total_size_bytes = _recv_exact(sock, _HEADER_SIZE)
-    total_size = struct.unpack(_HEADER_FMT, total_size_bytes)[0]
-
-    # Read packet count
-    count_bytes = _recv_exact(sock, _COUNT_SIZE)
-    packet_count = struct.unpack(_COUNT_FMT, count_bytes)[0]
-
-    # Read protocol-level conn_id
-    conn_id_bytes = _recv_exact(sock, _HEADER_SIZE)
-    conn_id = struct.unpack(_HEADER_FMT, conn_id_bytes)[0]
-
-    logger.info(
-        f"[CONN:{conn_id}] Receiving object: {total_size} bytes in {packet_count} packets"
-    )
-
-    # Collect chunks
-    payload = bytearray()
-    for idx in range(1, packet_count + 1):
-        size_bytes = _recv_exact(sock, _HEADER_SIZE)
-        chunk_size = struct.unpack(_HEADER_FMT, size_bytes)[0]
-        logger.info(
-            f"[CONN:{conn_id}] Receiving packet {idx}/{packet_count}: {chunk_size} bytes"
-        )
-        payload.extend(_recv_exact(sock, chunk_size))
-
-    # Verify length
-    if len(payload) != total_size:
-        raise ValueError(
-            f"[CONN:{conn_id}] Length mismatch: expected {total_size} bytes, got {len(payload)}"
-        )
-
-    # Read 32-byte ASCII MD5 trailer
-    expected_hash = _recv_exact(sock, 32).decode("ascii")
-    calc_hash = hashlib.md5(payload).hexdigest()
-    logger.info(f"[CONN:{conn_id}] Trailer hash: sent={expected_hash} calc={calc_hash}")
-    if expected_hash != calc_hash:
-        raise ValueError(
-            f"[CONN:{conn_id}] Hash mismatch: sent={expected_hash} vs calc={calc_hash}"
-        )
-
-    obj = pickle.loads(payload)
-
-    return obj
-
-
-def _send_obj(sock: socket.socket, obj: Any) -> int:
-    """
-    Send an object to the socket.
-
-    Args:
-        sock: The socket to send to
-        obj: The object to send
-
-    Returns:
-        int: The connection ID
-    """
-    global _connection_counter
-    _connection_counter += 1
-    conn_id = _connection_counter
-
-    obj["_conn_id"] = conn_id
-    obj = pickle.dumps(obj)
-
-    total_size = len(obj)
-    chunks = [obj[i : i + _CHUNK_SIZE] for i in range(0, total_size, _CHUNK_SIZE)]
-    total_packets = len(chunks)
-
-    # Compute MD5
-    content_hash = hashlib.md5(obj).hexdigest()
-    logger.info(
-        f"[CONN:{conn_id}] Sending {total_size} bytes in {total_packets} packets, MD5={content_hash}"
-    )
-
-    # Send headers
-    sock.sendall(struct.pack(_HEADER_FMT, total_size))
-    sock.sendall(struct.pack(_COUNT_FMT, total_packets))
-    sock.sendall(struct.pack(_HEADER_FMT, conn_id))
-
-    # Send chunks
-    for idx, chunk in enumerate(chunks, start=1):
-        chunk_size = len(chunk)
-        logger.info(
-            f"[CONN:{conn_id}] Sending packet {idx}/{total_packets}: {chunk_size} bytes"
-        )
-        sock.sendall(struct.pack(_HEADER_FMT, chunk_size))
-        sock.sendall(chunk)
-
-    # Send 32-byte ASCII hex MD5 trailer
-    sock.sendall(content_hash.encode("ascii"))
-    return conn_id
 
 
 class SupersayanClient(SupersayanModel):
@@ -194,7 +59,7 @@ class SupersayanClient(SupersayanModel):
             self._get_remote_layer_names()
 
     def _send_request(
-        self, payload: Dict[str, Any], timeout: int = _REQUEST_TIMEOUT
+        self, payload: Dict[str, Any], timeout: int = REQUEST_TIMEOUT
     ) -> Dict[str, Any]:
         """
         Open a short-lived connection, send payload, return response.
@@ -210,11 +75,11 @@ class SupersayanClient(SupersayanModel):
 
         try:
             sock = socket.create_connection((self.host, self.port), timeout=timeout)
-            conn_id = _send_obj(sock, payload)
+            conn_id = send_obj(sock, payload)
             logger.info(
                 f"[CONN:{conn_id}] Established connection to {self.host}:{self.port}"
             )
-            response = _recv_obj(sock)
+            response, _ = recv_obj(sock)
             logger.info(f"[CONN:{conn_id}] Completed request/response cycle")
         finally:
             if sock is not None:
