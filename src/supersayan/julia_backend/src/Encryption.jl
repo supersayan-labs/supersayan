@@ -41,10 +41,14 @@ end
 """
 Encrypt an array of messages to LWE ciphertexts
 """
-function encrypt_to_lwes(mus::AbstractArray{MU}, key::KEY, sigma::SIGMA = Constants.sigma)::LWE_ARRAY
-    n  = length(key) + 1
+function encrypt_to_lwes(
+    mus::AbstractArray{MU},
+    key::KEY,
+    sigma::SIGMA = Constants.sigma,
+)::LWE_ARRAY
+    n = length(key) + 1
     ct = Matrix{Float32}(undef, length(mus), n)
-    
+
     for (i, mu) in enumerate(mus)
         ct[i, :] .= encrypt_to_lwe(mu, key, sigma)
     end
@@ -55,7 +59,7 @@ end
 """
 Decrypt a single LWE ciphertext, returning a Float32 in [0,1)
 """
-function decrypt_from_lwe(c::LWE, key::KEY, p::P=Constants.p)::MU
+function decrypt_from_lwe(c::LWE, key::KEY, p::P = Constants.p)::MU
     a, b = extract_lwe(c)
     phase = real_to_torus(b - dot(key, a))
     discrete = project_to_discrete_torus(phase, p)
@@ -65,8 +69,14 @@ end
 """
 Decrypt a batch of LWE ciphertexts, returning an array of Float32 in [0,1)
 """
-function decrypt_from_lwes(ciphertexts::LWE_ARRAY, key::KEY, p::P=Constants.p)::AbstractArray{MU}
-    return [decrypt_from_lwe(view(ciphertexts, i, :), key, p) for i in 1:size(ciphertexts, 1)]
+function decrypt_from_lwes(
+    ciphertexts::LWE_ARRAY,
+    key::KEY,
+    p::P = Constants.p,
+)::AbstractArray{MU}
+    return [
+        decrypt_from_lwe(view(ciphertexts, i, :), key, p) for i = 1:size(ciphertexts, 1)
+    ]
 end
 
 """

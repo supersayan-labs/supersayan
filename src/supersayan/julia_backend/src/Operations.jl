@@ -10,8 +10,10 @@ BLAS.set_num_threads(Threads.nthreads())
 
 # Helper validation functions
 _validate_scalar(x::Float32) = @assert isfinite(x) "Scalar must be finite: got $x"
-_validate_same_shape(a, b) = @assert size(a) == size(b) "Shapes must match: got $(size(a)) and $(size(b))"
-_validate_lwe_array(x) = @assert ndims(x) == 2 && !isempty(x) "Expected non-empty 2D matrix, got $(ndims(x))D array"
+_validate_same_shape(a, b) =
+    @assert size(a) == size(b) "Shapes must match: got $(size(a)) and $(size(b))"
+_validate_lwe_array(x) =
+    @assert ndims(x) == 2 && !isempty(x) "Expected non-empty 2D matrix, got $(ndims(x))D array"
 
 """
 Homomorphic addition of two LWE ciphertexts.
@@ -67,18 +69,19 @@ add_lwe(lhs::Float32, rhs::LWE_ARRAY)::LWE_ARRAY = add_lwe(rhs, lhs)
 Apply a function element-wise to two arrays.
 """
 function _vector_op!(f, out::AbstractMatrix, a::AbstractMatrix, b::AbstractArray)
-    @assert size(out) == size(a) && size(a, 1) == (b isa AbstractMatrix ? size(b, 1) : length(b)) "Dimension mismatch"
-    
+    @assert size(out) == size(a) &&
+            size(a, 1) == (b isa AbstractMatrix ? size(b, 1) : length(b)) "Dimension mismatch"
+
     n = size(out, 1)
 
     if n > 100
-        @threads for i in 1:n
+        @threads for i = 1:n
             lhs_row = @view a[i, :]
             rhs_arg = b isa AbstractMatrix ? (@view b[i, :]) : b[i]
             out[i, :] = f(lhs_row, rhs_arg)
         end
     else
-        for i in 1:n
+        for i = 1:n
             lhs_row = @view a[i, :]
             rhs_arg = b isa AbstractMatrix ? (@view b[i, :]) : b[i]
             out[i, :] = f(lhs_row, rhs_arg)
@@ -121,62 +124,111 @@ mult_lwe(lhs::Float32, rhs::LWE_ARRAY)::LWE_ARRAY = mult_lwe(rhs, lhs)
 Compute the dot product of an array of LWE ciphertexts and an array of plaintext scalars. 
 The `zero_cipher` argument provides a ciphertext with the correct shape to initialize the accumulator.
 """
-function dot_product_lwe(enc::LWE_ARRAY,
-                     plain::AbstractArray{Float32},
-                     zero_cipher::LWE)::LWE
+function dot_product_lwe(
+    enc::LWE_ARRAY,
+    plain::AbstractArray{Float32},
+    zero_cipher::LWE,
+)::LWE
     _validate_lwe_array(enc)
     @assert ndims(plain) == 1 && size(enc, 1) == length(plain) "Expected 1D vector of length $(size(enc, 1)), got $(ndims(plain))D array of length $(length(plain))"
     @assert size(enc, 2) == length(zero_cipher) "LWE dimension mismatch: $(size(enc, 2)) vs $(length(zero_cipher))"
     @assert all(isfinite, plain) "All plaintext values must be finite"
-    
+
     accumulator = copy(zero_cipher)
-    
-    for i in 1:size(enc, 1)
+
+    for i = 1:size(enc, 1)
         enc_i = @view enc[i, :]
 
         product = mult_lwe(enc_i, plain[i])
 
         accumulator = add_lwe(accumulator, product)
     end
-    
+
     return accumulator
 end
 
 """
 Compute batch dot products of LWE ciphertexts and plaintext scalars.
 """
-function batch_dot_product_lwe(enc_batch::LWE_BATCH,
-                           plain_batch::AbstractMatrix{Float32},
-                           zero_cipher::LWE)::LWE_ARRAY
+function batch_dot_product_lwe(
+    enc_batch::LWE_BATCH,
+    plain_batch::AbstractMatrix{Float32},
+    zero_cipher::LWE,
+)::LWE_ARRAY
     @assert ndims(enc_batch) == 3 && ndims(plain_batch) == 2 "Expected 3D and 2D arrays"
-    
+
     batch_size, feature_dim, lwe_dim = size(enc_batch)
     @assert size(plain_batch) == (batch_size, feature_dim) && length(zero_cipher) == lwe_dim "Dimension mismatch"
     @assert all(isfinite, plain_batch) "All plaintext values must be finite"
-    
+
     out = Matrix{Float32}(undef, batch_size, lwe_dim)
-    
-    if batch_size > 10
-        @threads for b in 1:batch_size
-            enc_b = @view enc_batch[b, :, :]
-            plain_b = @view plain_batch[b, :]
-            
-            result = dot_product_lwe(enc_b, plain_b, zero_cipher)
-            out[b, :] = result
-        end
-    else
-        for b in 1:batch_size
-            enc_b = @view enc_batch[b, :, :]
-            plain_b = @view plain_batch[b, :]
-            
-            result = dot_product_lwe(enc_b, plain_b, zero_cipher)
-            out[b, :] = result
-        end
+
+    for b = 1:batch_size
+        enc_b = @view enc_batch[b, :, :]
+        plain_b = @view plain_batch[b, :]
+
+        result = dot_product_lwe(enc_b, plain_b, zero_cipher)
+        out[b, :] = result
     end
-    
+
     return out
 end
 
-export add_lwe, mult_lwe, dot_product_lwe, batch_dot_product_lwe
+"""
+Simple 2D convolution on LWE ciphertexts with plaintext weights.
+"""
+function conv2d_lwe(
+    input::LWE_BATCH,
+    weights::Array{Float32,4},
+    stride::Tuple{Int,Int} = (1, 1),
+    padding::Tuple{Int,Int} = (0, 0),
+    zero_cipher::LWE = zeros(Float32, size(input, 4)),
+)::LWE_BATCH
+    batch_size, in_channels, spatial_size, lwe_dim = size(input)
+    out_channels, _, kh, kw = size(weights)
+    sh, sw = stride
+    ph, pw = padding
+
+    H = W = Int(sqrt(spatial_size))
+    @assert H * W == spatial_size "Input must have square spatial dimensions"
+
+    H_out = (H + 2ph - kh) ÷ sh + 1
+    W_out = (W + 2pw - kw) ÷ sw + 1
+    spatial_out = H_out * W_out
+
+    output = Array{Float32,4}(undef, batch_size, out_channels, spatial_out, lwe_dim)
+
+    for b = 1:batch_size
+        for oc = 1:out_channels
+            out_idx = 1
+            for oh = 0:(H_out-1), ow = 0:(W_out-1)
+                acc = copy(zero_cipher)
+
+                for ic = 1:in_channels
+                    for kh_idx = 0:(kh-1), kw_idx = 0:(kw-1)
+                        ih = oh * sh - ph + kh_idx
+                        iw = ow * sw - pw + kw_idx
+
+                        if 0 ≤ ih < H && 0 ≤ iw < W
+                            spatial_idx = ih * W + iw + 1
+                            enc = @view input[b, ic, spatial_idx, :]
+                            weight_val = weights[oc, ic, kh_idx+1, kw_idx+1]
+
+                            prod = mult_lwe(enc, weight_val)
+                            acc = add_lwe(acc, prod)
+                        end
+                    end
+                end
+
+                output[b, oc, out_idx, :] = acc
+                out_idx += 1
+            end
+        end
+    end
+
+    return output
+end
+
+export add_lwe, mult_lwe, dot_product_lwe, batch_dot_product_lwe, conv2d_lwe
 
 end
