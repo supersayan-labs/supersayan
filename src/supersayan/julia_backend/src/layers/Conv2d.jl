@@ -1,123 +1,109 @@
-# Conv2d.jl
 module Conv2d
 
-using PyCall
 using Base.Threads
 using LinearAlgebra: BLAS
 
-# Import from parent module
-import SupersayanTFHE.Types: LWE, convert_pyobject_to_lwe, convert_pyobjects_to_lwes
-import SupersayanTFHE.Operations: add, mult, dot_product
-
-export conv2d_forward
+import ...Types: LWE, LWE_ARRAY, LWE_BATCH, pack_lwe, extract_lwe
+import ...Operations: add_lwe, mult_lwe, dot_product_lwe
 
 """
-    conv2d_forward(cipher_vec::Vector{T},
-                   input_shape::Tuple{Int,Int,Int,Int},
-                   weight::Array{<:Real,4},
-                   ksize::Tuple{Int,Int},
-                   stride::Tuple{Int,Int},
-                   padding::Tuple{Int,Int},
-                   dilation::Tuple{Int,Int},
-                   groups::Int,
-                   bias::Union{Vector{<:Real},Nothing}=nothing) where T <: Union{LWE,PyObject}
-
-Perform a "naïve" sliding-window 2D convolution on LWE ciphertexts:
-
-- `cipher_vec` is a flat Vector of length N*C_in*H*W (row-major).
-- `weight` is plain-text Float kernel of size (C_out, C_in/groups, kh, kw).
-- `bias` if given is a plain-text vector of length C_out.
-
-Uses `dot_product` to multiply each window by the plain kernel slice, and `add` to accumulate.
-Parallel over batch dimension.
+Performs a 2D convolution on a batch of LWE ciphertexts.
 """
 function conv2d_forward(
-    cipher_vec::Vector{T},
-    input_shape::Tuple{Int,Int,Int,Int},
-    weight::Array{<:Real,4},
+    input::LWE_BATCH,
+    weights::Array{Float32,4},
     ksize::Tuple{Int,Int},
     stride::Tuple{Int,Int},
     padding::Tuple{Int,Int},
     dilation::Tuple{Int,Int},
     groups::Int,
-    bias::Union{Vector{<:Real},Nothing}=nothing,
-) where T <: Union{LWE,PyObject}
+    bias::Union{Vector{Float32},Nothing} = nothing,
+)::LWE_BATCH
+    # Input shape: (batch_size, channels_in, height * width, lwe_dim)
+    batch_size, channels_in, spatial_size, lwe_dim = size(input)
 
-    # Unpack shapes
-    N, C_in, H, W = input_shape
-    kh, kw       = ksize
-    sh, sw       = stride
-    ph, pw       = padding
-    dh, dw       = dilation
-    C_out        = size(weight, 1)
-    @assert C_in % groups == 0 "in_channels must be divisible by groups"
-    @assert C_out % groups == 0 "out_channels must be divisible by groups"
-    g_in  = C_in  ÷ groups
-    g_out = C_out ÷ groups
+    # Deduce H and W from spatial_size
+    # Assuming square input for simplicity, adjust if needed
+    H = W = Int(sqrt(spatial_size))
+    @assert H * W == spatial_size "Input spatial dimensions must be square"
 
-    # Convert PyObjects if needed
-    input = isa(cipher_vec[1], PyObject) ?
-        convert_pyobjects_to_lwes(cipher_vec) : cipher_vec
+    # Weight shape: (channels_out, channels_in/groups, kh, kw)
+    channels_out, channels_per_group, kh, kw = size(weights)
 
-    # Compute output H_out, W_out
+    @assert channels_in % groups == 0 "in_channels must be divisible by groups"
+    @assert channels_out % groups == 0 "out_channels must be divisible by groups"
+    @assert channels_per_group == channels_in ÷ groups "Weight shape mismatch"
+
+    # Unpack convolution parameters
+    sh, sw = stride
+    ph, pw = padding
+    dh, dw = dilation
+
+    # Calculate output dimensions
     H_out = (H + 2ph - dh*(kh-1) - 1) ÷ sh + 1
     W_out = (W + 2pw - dw*(kw-1) - 1) ÷ sw + 1
+    spatial_out = H_out * W_out
 
-    total_out = N * C_out * H_out * W_out
-    output = Vector{LWE}(undef, total_out)
+    # Initialize output
+    output = Array{Float32,4}(undef, batch_size, channels_out, spatial_out, lwe_dim)
 
-    # Pre-allocate a zero ciphertext for bias if needed
-    zero_ct = LWE(zeros(eltype(input[1].mask), length(input[1].mask)), 0.0)
+    # Pre-allocate zero ciphertext
+    zero_cipher = zeros(Float32, lwe_dim)
 
-    @threads for n in 1:N
-        # Offsets into flat vectors
-        in_off  = (n-1)*C_in*H*W
-        out_off = (n-1)*C_out*H_out*W_out
+    # Process each batch
+    for b = 1:batch_size
+        # Process each group
+        for g = 1:groups
+            # Channel ranges for this group
+            in_start = (g-1) * channels_per_group + 1
+            in_end = g * channels_per_group
+            out_start = (g-1) * (channels_out ÷ groups) + 1
+            out_end = g * (channels_out ÷ groups)
 
-        for g in 1:groups
-            # slice of weight for this group: shape (g_out, g_in, kh, kw)
-            wgrp = view(weight, (g-1)*g_out+1:g*g_out, :, :, :)
+            # Process each output channel in this group
+            for oc = out_start:out_end
+                # Get weights for this output channel
+                weight_slice = @view weights[oc, :, :, :]
 
-            for oc in 1:g_out
-                # flatten the kh×kw×g_in kernel into one vector
-                kw_flat = vec(@view wgrp[oc, :, :, :])
+                # Process each output spatial position
+                for oh = 0:(H_out-1), ow = 0:(W_out-1)
+                    # Gather input window
+                    window_size = channels_per_group * kh * kw
+                    window = Matrix{Float32}(undef, window_size, lwe_dim)
+                    weight_flat = Vector{Float32}(undef, window_size)
 
-                # optional bias for this out‐channel
-                bval = bias === nothing ? nothing : bias[(g-1)*g_out + oc]
-
-                for oh in 0:H_out-1, ow in 0:W_out-1
-                    # gather one window across all g_in channels
-                    window = Vector{LWE}(undef, g_in*kh*kw)
                     idx = 1
-                    for ic in 0:g_in-1
-                        base = in_off + (g-1)*g_in*H*W + ic*H*W
-                        for r in 0:kh-1, c in 0:kw-1
+                    for ic = 1:channels_per_group
+                        for r = 0:(kh-1), c = 0:(kw-1)
                             ih = oh*sh + r*dh - ph
                             iw = ow*sw + c*dw - pw
+
                             if 0 ≤ ih < H && 0 ≤ iw < W
-                                window[idx] = input[base + ih*W + iw + 1]
+                                # Map to flattened spatial index
+                                spatial_idx = ih * W + iw + 1
+                                window[idx, :] =
+                                    @view input[b, in_start+ic-1, spatial_idx, :]
                             else
-                                # explicit zero-padding
-                                window[idx] = zero_ct
+                                # Zero padding
+                                window[idx, :] = zero_cipher
                             end
+
+                            weight_flat[idx] = weight_slice[ic, r+1, c+1]
                             idx += 1
                         end
                     end
 
-                    # encrypted dot with plaintext kernel
-                    sum_ct = dot_product(window, kw_flat, zero_ct)
+                    # Compute dot product
+                    result = dot_product_lwe(window, weight_flat, zero_cipher)
 
-                    # add bias if given
-                    if bval !== nothing
-                        sum_ct = add(sum_ct, bval)
+                    # Add bias if provided
+                    if bias !== nothing
+                        result = add_lwe(result, bias[oc])
                     end
 
-                    # store result
-                    out_idx = out_off +
-                              (g-1)*g_out*H_out*W_out +
-                              (oc-1)*H_out*W_out +
-                              oh*W_out + ow + 1
-                    output[out_idx] = sum_ct
+                    # Store result
+                    out_spatial_idx = oh * W_out + ow + 1
+                    output[b, oc, out_spatial_idx, :] = result
                 end
             end
         end
@@ -126,4 +112,6 @@ function conv2d_forward(
     return output
 end
 
-end # module
+export conv2d_forward
+
+end

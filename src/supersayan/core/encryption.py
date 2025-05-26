@@ -55,15 +55,10 @@ def decrypt_from_lwes(
     Returns:
         np.ndarray[MU]: A numpy array of float32 values with the same shape as the input
     """
-    # Ensure the input is a NumPy ndarray – Julia `PyArray` objects do not fully
-    # mimic ndarray and their `reshape` signature differs. Converting with
-    # `np.asarray` guarantees we get the familiar semantics while incurring only
-    # a cheap view/copy.
     ciphertexts_np = np.asarray(ciphertexts)
 
     original_shape = ciphertexts_np.shape
 
-    # Flatten the batch-dimension(s) but keep the LWE dimension intact.
     ciphertexts_flattened = np.reshape(ciphertexts_np, (-1, ciphertexts_np.shape[-1]))
    
     if p is not None:
