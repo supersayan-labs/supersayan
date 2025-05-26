@@ -41,20 +41,17 @@ class Linear(nn.Module):
             self.weight.detach().cpu().numpy()
         )  # shape: (out_features, in_features)
         bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
-
-        # Flatten the input array to a 1D vector for Julia processing using vectorized operations
-        flattened_input = input.reshape(batch_size * self.in_features).tolist()
-
+        
         logger.info(f"About to call Julia implementation directly")
         # Call Julia implementation directly
+        print(f"All of the types : input={type(input)}, weight_np={type(weight_np)}, bias_np={type(bias_np)}")
+        print(f"Shapes: input={input.shape}, weight_np={weight_np.shape}, bias_np={bias_np.shape if bias_np is not None else None}")
         julia_result = SupersayanTFHE.Layers.Linear.linear_forward(
-            flattened_input, weight_np, bias_np
+            input, weight_np, bias_np
         )
         logger.info(f"Julia implementation returned result")
-        # Reshape the result back to (batch_size, out_features) using vectorized operations
-        result = np.array(julia_result, dtype=object).reshape(
-            batch_size, self.out_features
-        )
+
+        result = np.asarray(julia_result, dtype=np.float32)
 
         return result
 

@@ -32,11 +32,17 @@ def encrypt_to_lwes(
         encrypted_flat = SupersayanTFHE.Encryption.encrypt_to_lwes(mus_flattened, key)
 
     # FIXME: Make sure the reshape is good
-    encrypted_np_array = np.array(encrypted_flat)
+    encrypted_np_array = np.asarray(encrypted_flat)
 
+<<<<<<< HEAD
     encrypted_np_array = [np.array(x).astype(np.float32) for x in encrypted_np_array]
 
     encrypted_np_array = np.array(encrypted_np_array).reshape(original_shape + (-1,))
+=======
+    encrypted_np_array = np.asarray([np.asarray(x).astype(np.float32) for x in encrypted_np_array])
+    
+    encrypted_np_array = encrypted_np_array.reshape((*original_shape, -1))
+>>>>>>> fa51822 (merci)
 
     return encrypted_np_array
 

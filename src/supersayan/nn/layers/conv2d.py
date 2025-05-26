@@ -100,7 +100,7 @@ class Conv2d(nn.Module):
         )
 
         # Julia returns a vector of ciphertexts → reshape
-        return np.array(y_flat, dtype=object).reshape(
+        return np.array(y_flat, dtype=np.float32).reshape(
             n, self.out_channels, h_out, w_out
         )
 
