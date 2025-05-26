@@ -8,7 +8,7 @@ from supersayan.core.bindings import SupersayanTFHE
 # Set fixed seed for reproducibility
 np.random.seed(456)
 
-EPSILON = 1
+EPSILON = 0.1
 
 
 def _mod1(x: np.ndarray) -> np.ndarray:

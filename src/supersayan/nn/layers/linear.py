@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class Linear(nn.Module):
-   def __init__(self, in_features: int, out_features: int, bias: bool = True):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True):
         super(Linear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
