@@ -5,11 +5,10 @@ include("Constants.jl")
 include("Encryption.jl")
 include("Operations.jl")
 
-# Re-export submodules
 export Types, Constants, Encryption, Operations
 
-# include("layers/Layers.jl")
+include("layers/Layers.jl")
 
-# export Layers
+export Layers
 
-end 
+end
