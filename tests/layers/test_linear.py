@@ -6,7 +6,6 @@ test_linear.py
 A test for a linear layer using FHE operations
 """
 
-import torch
 import numpy as np
 import logging
 import pytest
@@ -47,8 +46,7 @@ def test_linear_layer(fhe_secret_key):
 
         # Decrypt the result
         logger.info("Decrypting result...")
-        print("Output shape (encrypted):", output_encrypted[0].shape)
-        decrypted_output = decrypt_from_lwes(output_encrypted[0], fhe_secret_key)
+        decrypted_output = decrypt_from_lwes(output_encrypted, fhe_secret_key)
 
         print("\nOutput shape:", decrypted_output.shape)
         print("Output sample (all values):")

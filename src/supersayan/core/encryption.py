@@ -11,15 +11,30 @@ def encrypt_to_lwes(
 ) -> np.ndarray[LWE]:
     """
     Convert an numpy array of float32 values to an numpy array of LWE ciphertexts.
+    Can handle both single arrays and batch inputs.
 
     Args:
-        mus: The numpy array of float32 values to encrypt
+        mus: The numpy array of float32 values to encrypt. Can be:
+            - Single array: shape (d1, d2, ..., dn)
+            - Batch of arrays: shape (batch_size, d1, d2, ..., dn)
         key: The secret key
         sigma: The noise parameter (optional)
 
     Returns:
-        np.ndarray[LWE]: An numpy array of LWE ciphertext
+        np.ndarray[LWE]: An numpy array of LWE ciphertext with shape:
+            - Single array: (..., ciphertext_dim)
+            - Batch: (batch_size, ..., ciphertext_dim)
     """
+    if mus.ndim > 0:
+        batch_size = mus.shape[0]
+        encrypted_batch = []
+        
+        for i in range(batch_size):
+            encrypted_single = encrypt_to_lwes(mus[i], key, sigma)
+            encrypted_batch.append(encrypted_single)
+        
+        return np.array(encrypted_batch)
+    
     original_shape = mus.shape
 
     mus_flattened = mus.flatten()
@@ -34,15 +49,9 @@ def encrypt_to_lwes(
     # FIXME: Make sure the reshape is good
     encrypted_np_array = np.asarray(encrypted_flat)
 
-<<<<<<< HEAD
-    encrypted_np_array = [np.array(x).astype(np.float32) for x in encrypted_np_array]
-
-    encrypted_np_array = np.array(encrypted_np_array).reshape(original_shape + (-1,))
-=======
     encrypted_np_array = np.asarray([np.asarray(x).astype(np.float32) for x in encrypted_np_array])
     
     encrypted_np_array = encrypted_np_array.reshape((*original_shape, -1))
->>>>>>> fa51822 (merci)
 
     return encrypted_np_array
 
@@ -52,15 +61,30 @@ def decrypt_from_lwes(
 ) -> np.ndarray[MU]:
     """
     Convert an numpy array of LWE ciphertexts to an numpy array of float32 values.
+    Can handle both single arrays and batch inputs.
 
     Args:
-        ciphertexts: The numpy array of LWE ciphertexts to decrypt
+        ciphertexts: The numpy array of LWE ciphertexts to decrypt. Can be:
+            - Single array: shape (..., ciphertext_dim)
+            - Batch of arrays: shape (batch_size, ..., ciphertext_dim)
         key: The secret key
         p: The precision parameter (optional)
 
     Returns:
-        np.ndarray[MU]: A numpy array of float32 values
+        np.ndarray[MU]: A numpy array of float32 values with shape:
+            - Single array: original shape without ciphertext_dim
+            - Batch: (batch_size, ...) without ciphertext_dim
     """
+    if ciphertexts.ndim > 1:
+        batch_size = ciphertexts.shape[0]
+        decrypted_batch = []
+        
+        for i in range(batch_size):
+            decrypted_single = decrypt_from_lwes(ciphertexts[i], key, p)
+            decrypted_batch.append(decrypted_single)
+        
+        return np.array(decrypted_batch)
+    
     ciphertexts_np = np.asarray(ciphertexts)
 
     original_shape = ciphertexts_np.shape
