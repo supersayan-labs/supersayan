@@ -88,15 +88,15 @@ class Conv2d(nn.Module):
         b_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
 
         y_flat = SupersayanTFHE.Layers.Conv2d.conv2d_forward(
-            x.flatten().tolist(),      # ciphertexts
-            (n, c, h, w),              # input shape
-            w_np,                      # plaintext weights
+            x.flatten().tolist(),  # ciphertexts
+            (n, c, h, w),  # input shape
+            w_np,  # plaintext weights
             self.kernel_size,
             self.stride,
             self.padding,
             self.dilation,
             self.groups,
-            b_np,                      # plaintext bias
+            b_np,  # plaintext bias
         )
 
         # Julia returns a vector of ciphertexts → reshape

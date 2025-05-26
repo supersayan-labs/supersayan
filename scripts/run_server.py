@@ -22,9 +22,9 @@ from supersayan.remote.server import SupersayanServer
 
 # Constants for chunking
 _CHUNK_SIZE = 500 * 1024 * 1024  # 50 MiB
-_HEADER_FMT = "!Q"               # unsigned long long – 8-byte integer
+_HEADER_FMT = "!Q"  # unsigned long long – 8-byte integer
 _HEADER_SIZE = struct.calcsize(_HEADER_FMT)
-_COUNT_FMT = "!I"                # unsigned int – 4-byte integer for packet count
+_COUNT_FMT = "!I"  # unsigned int – 4-byte integer for packet count
 _COUNT_SIZE = struct.calcsize(_COUNT_FMT)
 
 # Counter to track connections
@@ -52,26 +52,34 @@ def _recv_obj(sock: socket.socket) -> Tuple[Any, int]:
     conn_id_bytes = _recv_exact(sock, _HEADER_SIZE)
     conn_id = struct.unpack(_HEADER_FMT, conn_id_bytes)[0]
 
-    logger.info(f"[CONN:{conn_id}] Receiving object: {total_size} bytes in {packet_count} packets")
+    logger.info(
+        f"[CONN:{conn_id}] Receiving object: {total_size} bytes in {packet_count} packets"
+    )
 
     # Collect chunks
     payload = bytearray()
     for idx in range(1, packet_count + 1):
         size_bytes = _recv_exact(sock, _HEADER_SIZE)
         chunk_size = struct.unpack(_HEADER_FMT, size_bytes)[0]
-        logger.info(f"[CONN:{conn_id}] Receiving packet {idx}/{packet_count}: {chunk_size} bytes")
+        logger.info(
+            f"[CONN:{conn_id}] Receiving packet {idx}/{packet_count}: {chunk_size} bytes"
+        )
         payload.extend(_recv_exact(sock, chunk_size))
 
     # Verify length
     if len(payload) != total_size:
-        raise ValueError(f"[CONN:{conn_id}] Length mismatch: expected {total_size} bytes, got {len(payload)}")
+        raise ValueError(
+            f"[CONN:{conn_id}] Length mismatch: expected {total_size} bytes, got {len(payload)}"
+        )
 
     # Read 32-byte ASCII MD5 trailer
-    expected_hash = _recv_exact(sock, 32).decode('ascii')
+    expected_hash = _recv_exact(sock, 32).decode("ascii")
     calc_hash = hashlib.md5(payload).hexdigest()
     logger.info(f"[CONN:{conn_id}] Trailer hash: sent={expected_hash} calc={calc_hash}")
     if expected_hash != calc_hash:
-        raise ValueError(f"[CONN:{conn_id}] Hash mismatch: sent={expected_hash} vs calc={calc_hash}")
+        raise ValueError(
+            f"[CONN:{conn_id}] Hash mismatch: sent={expected_hash} vs calc={calc_hash}"
+        )
 
     obj = pickle.loads(payload)
     return obj, conn_id
@@ -96,7 +104,9 @@ def _send_obj(sock: socket.socket, obj: Any, conn_id: int = None) -> None:
 
     # Compute MD5 over the raw payload
     content_hash = hashlib.md5(payload).hexdigest()
-    logger.info(f"[CONN:{conn_id}] Sending {total_size} bytes in {total_packets} packets, MD5={content_hash}")
+    logger.info(
+        f"[CONN:{conn_id}] Sending {total_size} bytes in {total_packets} packets, MD5={content_hash}"
+    )
 
     # Send protocol headers
     sock.sendall(struct.pack(_HEADER_FMT, total_size))
@@ -106,15 +116,19 @@ def _send_obj(sock: socket.socket, obj: Any, conn_id: int = None) -> None:
     # Send each chunk
     for idx, chunk in enumerate(chunks, start=1):
         chunk_size = len(chunk)
-        logger.info(f"[CONN:{conn_id}] Sending packet {idx}/{total_packets}: {chunk_size} bytes")
+        logger.info(
+            f"[CONN:{conn_id}] Sending packet {idx}/{total_packets}: {chunk_size} bytes"
+        )
         sock.sendall(struct.pack(_HEADER_FMT, chunk_size))
         sock.sendall(chunk)
 
     # Send 32-byte ASCII hex MD5 trailer
-    sock.sendall(content_hash.encode('ascii'))
+    sock.sendall(content_hash.encode("ascii"))
 
 
-def _handle_client(conn: socket.socket, addr: tuple[str, int], server: SupersayanServer) -> None:
+def _handle_client(
+    conn: socket.socket, addr: tuple[str, int], server: SupersayanServer
+) -> None:
     logger.info("connection from %s:%s", *addr)
     try:
         while True:
@@ -135,15 +149,25 @@ def _handle_client(conn: socket.socket, addr: tuple[str, int], server: Supersaya
                     model_id = server.handle_upload_model_bytes(request["model_data"])
                     _send_obj(conn, {"status": True, "model_id": model_id}, conn_id)
                 elif cmd == "get_model_structure":
-                    structure = server.handle_get_model_structure_simple(request["model_id"])
+                    structure = server.handle_get_model_structure_simple(
+                        request["model_id"]
+                    )
                     _send_obj(conn, {"status": True, "structure": structure}, conn_id)
                 elif cmd == "inference":
                     output = server.handle_inference_simple(
-                        request["model_id"], request["layer_name"], request["encrypted_input"]
+                        request["model_id"],
+                        request["layer_name"],
+                        request["encrypted_input"],
                     )
-                    _send_obj(conn, {"status": True, "encrypted_output": output}, conn_id)
+                    _send_obj(
+                        conn, {"status": True, "encrypted_output": output}, conn_id
+                    )
                 else:
-                    _send_obj(conn, {"status": False, "error": f"unknown command: {cmd}"}, conn_id)
+                    _send_obj(
+                        conn,
+                        {"status": False, "error": f"unknown command: {cmd}"},
+                        conn_id,
+                    )
             except Exception as exc:
                 logger.exception(f"[CONN:{conn_id}] Error handling command {cmd}")
                 _send_obj(conn, {"status": False, "error": str(exc)}, conn_id)
@@ -175,7 +199,9 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
     _serve_forever(args.host, args.port, args.models_dir)
 
 

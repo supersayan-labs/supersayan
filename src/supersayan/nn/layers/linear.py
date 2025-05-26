@@ -44,7 +44,7 @@ class Linear(nn.Module):
 
         # Flatten the input array to a 1D vector for Julia processing using vectorized operations
         flattened_input = input.reshape(batch_size * self.in_features).tolist()
-        
+
         logger.info(f"About to call Julia implementation directly")
         # Call Julia implementation directly
         julia_result = SupersayanTFHE.Layers.Linear.linear_forward(

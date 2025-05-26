@@ -5,6 +5,7 @@ from .types import LWE, SIGMA, MU, KEY, P
 
 logger = logging.getLogger(__name__)
 
+
 def encrypt_to_lwes(
     mus: np.ndarray[MU], key: KEY, sigma: SIGMA = None
 ) -> np.ndarray[LWE]:
@@ -28,18 +29,17 @@ def encrypt_to_lwes(
             mus_flattened, key, sigma
         )
     else:
-        encrypted_flat = SupersayanTFHE.Encryption.encrypt_to_lwes(
-            mus_flattened, key
-        )
-    
+        encrypted_flat = SupersayanTFHE.Encryption.encrypt_to_lwes(mus_flattened, key)
+
     # FIXME: Make sure the reshape is good
     encrypted_np_array = np.array(encrypted_flat)
 
     encrypted_np_array = [np.array(x).astype(np.float32) for x in encrypted_np_array]
-    
+
     encrypted_np_array = np.array(encrypted_np_array).reshape(original_shape + (-1,))
 
     return encrypted_np_array
+
 
 def decrypt_from_lwes(
     ciphertexts: np.ndarray[LWE], key: KEY, p: P = None
@@ -60,16 +60,15 @@ def decrypt_from_lwes(
     original_shape = ciphertexts_np.shape
 
     ciphertexts_flattened = np.reshape(ciphertexts_np, (-1, ciphertexts_np.shape[-1]))
-   
+
     if p is not None:
         decrypted_values = SupersayanTFHE.Encryption.decrypt_from_lwes(
             ciphertexts_flattened, key, p
         )
-    else: 
+    else:
         decrypted_values = SupersayanTFHE.Encryption.decrypt_from_lwes(
             ciphertexts_flattened, key
         )
-
 
     decrypted_np_array = np.array(decrypted_values).reshape(original_shape[:-1])
 

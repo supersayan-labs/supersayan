@@ -32,7 +32,7 @@ def test_conv2d_layer():
     # logger.info("Pickling Conv2d layer...")
     # conv = pickle.loads(pickle.dumps(conv))
     # logger.info("Unpickled Conv2d layer")
-    
+
     # Generate random input with batch size 1 and shape (1, 3, 8, 8)
     input_data = torch.randn(1, 3, 8, 8)
     print("Input shape:", input_data.shape)
@@ -119,6 +119,7 @@ if __name__ == "__main__":
     print("\n=== Testing Conv2d with Stride ===")
     test_conv2d_with_stride()
 
+
 def test_large_conv2d_layer():
     """
     Test a larger Conv2d layer with more output channels and a larger kernel size.
@@ -127,38 +128,47 @@ def test_large_conv2d_layer():
     # Generate secret key
     logger.info("Generating secret key for large Conv2d test...")
     key = generate_secret_key()
-    
+
     # Define a larger FHE convolutional layer
     logger.info("Creating large Conv2d layer...")
-    conv = Conv2d(in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False)
-    
+    conv = Conv2d(
+        in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False
+    )
+
     # Generate random input with batch size 1 and shape (1, 3, 16, 16)
     input_data = torch.randn(1, 3, 224, 224)
     print("Input shape for large Conv2d:", input_data.shape)
-    
+
     try:
         # Encrypt the input data
         logger.info("Encrypting input data for large Conv2d...")
         encrypted_input = encrypt(input_data, key)
-        
+
         # Forward pass through the larger convolutional layer
         logger.info("Processing large convolutional layer...")
         output_encrypted = conv(encrypted_input)
-        
+
         # Decrypt the result
         logger.info("Decrypting result from large Conv2d...")
         decrypted_output = decrypt(output_encrypted, key)
-        
+
         print("\nOutput shape for large Conv2d:", decrypted_output.shape)
         print("Output sample (all values):")
         print(decrypted_output[0, 0])
-        
+
     except Exception as e:
         logger.error(f"FHE large convolution failed: {e}")
         raise
-    
+
     # Verify output has correct shape
-    expected_shape = (1, 64, 112, 112)  # Output shape considering stride=2 and padding=3
-    assert decrypted_output.shape == expected_shape, f"Expected shape {expected_shape} but got {decrypted_output.shape}"
-    
+    expected_shape = (
+        1,
+        64,
+        112,
+        112,
+    )  # Output shape considering stride=2 and padding=3
+    assert (
+        decrypted_output.shape == expected_shape
+    ), f"Expected shape {expected_shape} but got {decrypted_output.shape}"
+
     logger.info("Large Conv2d test completed successfully")

@@ -27,6 +27,7 @@ def secret_key():
     """Generate a secret key once for all multiplication/dot-product tests."""
     return generate_secret_key()
 
+
 # -----------------------------------------------------------------------------
 # Scalar multiplication tests
 # -----------------------------------------------------------------------------
@@ -73,6 +74,7 @@ def test_mult_large_vector_parallel(secret_key):
 
     _assert_close(decrypted, expected)
 
+
 # -----------------------------------------------------------------------------
 # Dot-product tests
 # -----------------------------------------------------------------------------
@@ -100,38 +102,44 @@ def test_batch_dot_product(secret_key):
     """Test batch encrypted vector x plaintext vector dot-products."""
     batch_size = 5
     feature_dim = 10
-    
+
     # Create batch of plaintext vectors to encrypt
-    enc_plain_batch = np.random.uniform(0.0, 0.3, size=(batch_size, feature_dim)).astype(np.float32)
-    
+    enc_plain_batch = np.random.uniform(
+        0.0, 0.3, size=(batch_size, feature_dim)
+    ).astype(np.float32)
+
     # Create batch of plaintext weight vectors
-    plain_weights_batch = np.random.uniform(-0.5, 0.5, size=(batch_size, feature_dim)).astype(np.float32)
-    
+    plain_weights_batch = np.random.uniform(
+        -0.5, 0.5, size=(batch_size, feature_dim)
+    ).astype(np.float32)
+
     # Encrypt each vector in the batch
     enc_ct_batch = []
     for i in range(batch_size):
         enc_ct_batch.append(encrypt_to_lwes(enc_plain_batch[i], secret_key))
-    
+
     # Stack into 3D array (batch_size, feature_dim, lwe_dim)
     enc_ct_batch = np.stack(enc_ct_batch, axis=0)
-    
+
     # Get zero ciphertext for initialization
     zero_ct = encrypt_to_lwes(np.array([0.0], dtype=np.float32), secret_key)[0]
-    
+
     # Perform batch dot product
     res_ct_batch = SupersayanTFHE.Operations.batch_dot_product_lwe(
         enc_ct_batch, plain_weights_batch, zero_ct
     )
-    
+
     # Decrypt results
     decrypted_batch = decrypt_from_lwes(res_ct_batch, secret_key)
-    
+
     # Compute expected results
-    expected_batch = np.array([
-        _mod1(np.dot(enc_plain_batch[i], plain_weights_batch[i]))
-        for i in range(batch_size)
-    ])
-    
+    expected_batch = np.array(
+        [
+            _mod1(np.dot(enc_plain_batch[i], plain_weights_batch[i]))
+            for i in range(batch_size)
+        ]
+    )
+
     _assert_close(decrypted_batch, expected_batch)
 
 
@@ -139,34 +147,40 @@ def test_batch_dot_product(secret_key):
 def test_batch_dot_product_various_sizes(secret_key, batch_size, feature_dim):
     """Test batch dot product with various batch and feature dimensions."""
     # Create batch of plaintext vectors to encrypt
-    enc_plain_batch = np.random.uniform(0.0, 0.2, size=(batch_size, feature_dim)).astype(np.float32)
-    
+    enc_plain_batch = np.random.uniform(
+        0.0, 0.2, size=(batch_size, feature_dim)
+    ).astype(np.float32)
+
     # Create batch of plaintext weight vectors
-    plain_weights_batch = np.random.uniform(-0.3, 0.3, size=(batch_size, feature_dim)).astype(np.float32)
-    
+    plain_weights_batch = np.random.uniform(
+        -0.3, 0.3, size=(batch_size, feature_dim)
+    ).astype(np.float32)
+
     # Encrypt each vector in the batch
     enc_ct_batch = []
     for i in range(batch_size):
         enc_ct_batch.append(encrypt_to_lwes(enc_plain_batch[i], secret_key))
-    
+
     # Stack into 3D array (batch_size, feature_dim, lwe_dim)
     enc_ct_batch = np.stack(enc_ct_batch, axis=0)
-    
+
     # Get zero ciphertext for initialization
     zero_ct = encrypt_to_lwes(np.array([0.0], dtype=np.float32), secret_key)[0]
-    
+
     # Perform batch dot product
     res_ct_batch = SupersayanTFHE.Operations.batch_dot_product_lwe(
         enc_ct_batch, plain_weights_batch, zero_ct
     )
-    
+
     # Decrypt results
     decrypted_batch = decrypt_from_lwes(res_ct_batch, secret_key)
-    
+
     # Compute expected results
-    expected_batch = np.array([
-        _mod1(np.dot(enc_plain_batch[i], plain_weights_batch[i]))
-        for i in range(batch_size)
-    ])
-    
+    expected_batch = np.array(
+        [
+            _mod1(np.dot(enc_plain_batch[i], plain_weights_batch[i]))
+            for i in range(batch_size)
+        ]
+    )
+
     _assert_close(decrypted_batch, expected_batch)
