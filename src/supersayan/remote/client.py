@@ -8,7 +8,6 @@ import torch.nn as nn
 import numpy as np
 
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
-from supersayan.core.keygen import generate_secret_key
 from supersayan.nn.convert import ModelType, SupersayanModel
 from supersayan.remote.socket_utils import (
     recv_obj,
@@ -39,8 +38,6 @@ class SupersayanClient(SupersayanModel):
             model_type=ModelType.HYBRID,
             fhe_modules=fhe_modules,
         )
-
-        self.secret_key = generate_secret_key()
         self.model_id = model_id
         self.uploaded = model_id is not None
 
@@ -154,51 +151,7 @@ class SupersayanClient(SupersayanModel):
 
         return response["encrypted_output"]
 
-    def _hybrid_forward_module(
-        self, prefix: str, module: nn.Module, x: np.ndarray[np.float32]
-    ) -> np.ndarray[np.float32]:
-        """
-        Recurse through module; offload FHE layers, run others locally.
-
-        Args:
-            prefix: The prefix of the module
-            module: The module to forward
-            x: The input tensor
-
-        Returns:
-            np.ndarray[np.float32]: The output tensor
-        """
-        full_name = prefix
-
-        # Normalize the name to match fhe_module_names format (dots replaced with underscores)
-        normalized_name = full_name.replace(".", "_")
-
-        if normalized_name in self.fhe_module_names:
-            enc_in = encrypt_to_lwes(x, self.secret_key)
-
-            enc_out = self._process_layer(normalized_name, enc_in)
-
-            dec = decrypt_from_lwes(enc_out, self.secret_key)
-
-            return dec
-
-        children = list(module.named_children())
-
-        if children:
-            out = x
-
-            for child_name, child_module in children:
-                child_full = f"{full_name}.{child_name}"
-                out = self._hybrid_forward_module(child_full, child_module, out)
-
-            return out
-
-        torch_input = torch.from_numpy(x)
-        torch_output = module(torch_input)
-
-        return torch_output.detach().numpy().astype(np.float32)
-
-    def _forward_hybrid(self, x: np.ndarray[np.float32]) -> np.ndarray[np.float32]:
+    def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
         """
         Hybrid forward pass.
 
@@ -206,18 +159,42 @@ class SupersayanClient(SupersayanModel):
             x: The input tensor
 
         Returns:
-            np.ndarray[np.float32]: The output tensor
+            torch.Tensor: The output tensor
         """
-        out = x
-
-        for name, module in self.original_model.named_children():
-            out = self._hybrid_forward_module(name, module, out)
-
-        return out
+        # Register hooks to intercept FHE layers
+        hooks = []
+        
+        def make_hook(layer_name):
+            def hook(module, input, output):
+                x_np = input[0].detach().cpu().numpy().astype(np.float32)
+                
+                enc_in = encrypt_to_lwes(x_np, self.secret_key)
+                enc_out = self._process_layer(layer_name, enc_in)
+                dec = decrypt_from_lwes(enc_out, self.secret_key)
+                
+                return torch.from_numpy(dec)
+            return hook
+        
+        # Register hooks for all FHE modules
+        for name, module in self.original_model.named_modules():
+            normalized_name = name.replace(".", "_")
+            if normalized_name in self.fhe_module_names:
+                hook = module.register_forward_hook(make_hook(normalized_name))
+                hooks.append(hook)
+        
+        # Run forward pass
+        with torch.no_grad():
+            torch_output = self.original_model(x)
+        
+        # Remove hooks
+        for hook in hooks:
+            hook.remove()
+        
+        return torch_output
 
     def forward(
-        self, x: np.ndarray[np.float32] | torch.Tensor
-    ) -> np.ndarray[np.float32]:
+        self, x: torch.Tensor
+    ) -> torch.Tensor:
         """
         Forward pass.
 
@@ -225,11 +202,8 @@ class SupersayanClient(SupersayanModel):
             x: The input tensor
 
         Returns:
-            np.ndarray[np.float32]: The output tensor
+            torch.Tensor: The output tensor
         """
         self._upload_model_if_needed()
-
-        if not isinstance(x, np.ndarray):
-            x = np.asarray(x, dtype=np.float32)
 
         return self._forward_hybrid(x)

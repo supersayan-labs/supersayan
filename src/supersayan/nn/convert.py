@@ -1,9 +1,8 @@
 from __future__ import annotations
 import logging
-from abc import ABC
 from enum import Enum
-from typing import List, Optional, Type, Union, cast
-
+from typing import List, Optional, Type, Union
+import numpy as np
 import torch
 import torch.nn as nn
 from supersayan.core.keygen import generate_secret_key
@@ -25,8 +24,8 @@ class ModelType(Enum):
     HYBRID = "hybrid"
 
 
-class SupersayanModel(nn.Module, ABC):
-    """Base class offering pure FHE and hybrid modes."""
+class SupersayanModel(nn.Module):
+    """Base class offering pure FHE."""
 
     def __init__(
         self,
@@ -38,6 +37,8 @@ class SupersayanModel(nn.Module, ABC):
 
         self.original_model = torch_model
         self.model_type = model_type
+
+        self.secret_key = generate_secret_key()
 
         if model_type == ModelType.HYBRID and not fhe_modules:
             raise ValueError("fhe_modules must be provided for hybrid models")
@@ -52,7 +53,6 @@ class SupersayanModel(nn.Module, ABC):
                 self.modules_dict[name] = self._convert_module(module)
                 self.fhe_module_names.append(name)
         else:
-
             fhe_module_names_set = set()
 
             # Get all named modules for lookup
@@ -155,14 +155,15 @@ class SupersayanModel(nn.Module, ABC):
             torch.Tensor: The output tensor
         """
         if self.model_type == ModelType.PURE:
-            key = generate_secret_key()
-            enc = encrypt_to_lwes(x, key)
+            x_np = x.detach().cpu().numpy().astype(np.float32)
+
+            enc = encrypt_to_lwes(x_np, self.secret_key)
 
             for name in self.fhe_module_names:
                 enc = self.modules_dict[name](enc)
 
-            return torch.tensor(
-                decrypt_from_lwes(enc, key), dtype=x.dtype, device=x.device
-            )
+            dec = decrypt_from_lwes(enc, self.secret_key)
+
+            return torch.from_numpy(dec)
 
         raise NotImplementedError("Hybrid forward is implemented by SupersayanClient")

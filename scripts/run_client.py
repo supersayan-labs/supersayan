@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def test_hybrid_house_price_regression(
     server: str = "127.0.0.1:8000",
-) -> None:  # noqa: D401
+) -> None:
     class HousePriceRegressor(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -36,8 +36,8 @@ def test_hybrid_house_price_regression(
 
     torch_model = HousePriceRegressor()
     num_samples = 100
-    test_x = np.random.rand(num_samples, 5).astype(np.float32)
-    torch_values = torch_model(torch.from_numpy(test_x)).detach().numpy()
+    test_x = torch.rand(num_samples, 5)
+    torch_values = torch_model(test_x)
 
     client = SupersayanClient(
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Linear]
@@ -55,8 +55,8 @@ def test_resnet18_random_input(server: str = "127.0.0.1:8000") -> None:
 
     print(summary(torch_model, (3, 224, 224)))
 
-    test_x = np.random.rand(1, 3, 224, 224).astype(np.float32)
-    torch_values = torch_model(torch.from_numpy(test_x)).detach().numpy()
+    test_x = torch.rand(1, 3, 224, 224)
+    torch_values = torch_model(test_x)
 
     client = SupersayanClient(
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
@@ -108,10 +108,10 @@ def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
     print(summary(torch_model, (1, 28, 28)))
 
     batch_size = 4
-    test_x = np.random.rand(batch_size, 1, 28, 28).astype(np.float32)
+    test_x = torch.rand(batch_size, 1, 28, 28)
 
     with torch.no_grad():
-        torch_values = torch_model(torch.from_numpy(test_x)).detach().numpy()
+        torch_values = torch_model(test_x)
 
     client = SupersayanClient(
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
@@ -122,8 +122,8 @@ def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
     end = time.time()
     print(f"Time taken: {end - start} seconds")
 
-    mean_diff = float(np.mean(np.abs(torch_values - client_values)))
-    max_diff = float(np.max(np.abs(torch_values - client_values)))
+    mean_diff = float(torch.mean(torch.abs(torch_values - client_values)))
+    max_diff = float(torch.max(torch.abs(torch_values - client_values)))
 
     logger.info("MNIST CNN – mean abs diff: %.6f", mean_diff)
     logger.info("MNIST CNN – max abs diff: %.6f", max_diff)
@@ -139,5 +139,5 @@ def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
 
 if __name__ == "__main__":
     # test_hybrid_house_price_regression()
-    test_resnet18_random_input()
-    # test_mnist_cnn()
+    # test_resnet18_random_input()
+    test_mnist_cnn()
