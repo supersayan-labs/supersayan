@@ -33,7 +33,7 @@ def encrypt_to_lwes(
             encrypted_single = encrypt_to_lwes(mus[i], key, sigma)
             encrypted_batch.append(encrypted_single)
         
-        return np.array(encrypted_batch)
+        return np.asarray(encrypted_batch)
     
     original_shape = mus.shape
 
@@ -83,7 +83,7 @@ def decrypt_from_lwes(
             decrypted_single = decrypt_from_lwes(ciphertexts[i], key, p)
             decrypted_batch.append(decrypted_single)
         
-        return np.array(decrypted_batch)
+        return np.asarray(decrypted_batch)
     
     ciphertexts_np = np.asarray(ciphertexts)
 
@@ -100,6 +100,6 @@ def decrypt_from_lwes(
             ciphertexts_flattened, key
         )
 
-    decrypted_np_array = np.array(decrypted_values).reshape(original_shape[:-1])
+    decrypted_np_array = np.asarray(decrypted_values).reshape(original_shape[:-1])
 
     return decrypted_np_array

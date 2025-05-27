@@ -107,8 +107,8 @@ def test_add_lwe_single_ciphertext(secret_key):
     rhs_val = np.float32(0.3)
 
     # Each call returns shape (1, n). Extract the single vector so Julia sees a Vector{Float32}
-    lhs_ct = encrypt_to_lwes(np.array([lhs_val], dtype=np.float32), secret_key)[0]
-    rhs_ct = encrypt_to_lwes(np.array([rhs_val], dtype=np.float32), secret_key)[0]
+    lhs_ct = encrypt_to_lwes(np.asarray([lhs_val], dtype=np.float32), secret_key)[0]
+    rhs_ct = encrypt_to_lwes(np.asarray([rhs_val], dtype=np.float32), secret_key)[0]
 
     res_ct = SupersayanTFHE.Operations.add_lwe(lhs_ct, rhs_ct)
 

@@ -88,14 +88,14 @@ def test_dot_product(secret_key):
 
     enc_ct = encrypt_to_lwes(enc_plain, secret_key)
 
-    zero_ct = encrypt_to_lwes(np.array([0.0], dtype=np.float32), secret_key)[0]
+    zero_ct = encrypt_to_lwes(np.asarray([0.0], dtype=np.float32), secret_key)[0]
 
     res_ct = SupersayanTFHE.Operations.dot_product_lwe(enc_ct, plain_weights, zero_ct)
 
     decrypted = decrypt_from_lwes(np.expand_dims(res_ct, 0), secret_key)[0]
     expected = _mod1(np.dot(enc_plain, plain_weights))
 
-    _assert_close(np.array([decrypted]), np.array([expected]))
+    _assert_close(np.asarray([decrypted]), np.asarray([expected]))
 
 
 def test_batch_dot_product(secret_key):
@@ -122,7 +122,7 @@ def test_batch_dot_product(secret_key):
     enc_ct_batch = np.stack(enc_ct_batch, axis=0)
 
     # Get zero ciphertext for initialization
-    zero_ct = encrypt_to_lwes(np.array([0.0], dtype=np.float32), secret_key)[0]
+    zero_ct = encrypt_to_lwes(np.asarray([0.0], dtype=np.float32), secret_key)[0]
 
     # Perform batch dot product
     res_ct_batch = SupersayanTFHE.Operations.batch_dot_product_lwe(
@@ -133,7 +133,7 @@ def test_batch_dot_product(secret_key):
     decrypted_batch = decrypt_from_lwes(res_ct_batch, secret_key)
 
     # Compute expected results
-    expected_batch = np.array(
+    expected_batch = np.asarray(
         [
             _mod1(np.dot(enc_plain_batch[i], plain_weights_batch[i]))
             for i in range(batch_size)
@@ -165,7 +165,7 @@ def test_batch_dot_product_various_sizes(secret_key, batch_size, feature_dim):
     enc_ct_batch = np.stack(enc_ct_batch, axis=0)
 
     # Get zero ciphertext for initialization
-    zero_ct = encrypt_to_lwes(np.array([0.0], dtype=np.float32), secret_key)[0]
+    zero_ct = encrypt_to_lwes(np.asarray([0.0], dtype=np.float32), secret_key)[0]
 
     # Perform batch dot product
     res_ct_batch = SupersayanTFHE.Operations.batch_dot_product_lwe(
@@ -176,7 +176,7 @@ def test_batch_dot_product_various_sizes(secret_key, batch_size, feature_dim):
     decrypted_batch = decrypt_from_lwes(res_ct_batch, secret_key)
 
     # Compute expected results
-    expected_batch = np.array(
+    expected_batch = np.asarray(
         [
             _mod1(np.dot(enc_plain_batch[i], plain_weights_batch[i]))
             for i in range(batch_size)
