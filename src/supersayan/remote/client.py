@@ -190,7 +190,10 @@ class SupersayanClient(SupersayanModel):
 
             return out
 
-        return np.asarray(module(torch.from_numpy(x)), dtype=np.float32)
+        torch_input = torch.from_numpy(x)
+        torch_output = module(torch_input)
+
+        return torch_output.detach().numpy().astype(np.float32)
 
     def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
         """
