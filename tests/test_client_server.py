@@ -1,23 +1,19 @@
 import os
 import sys
 import time
-import pytest
+import socket
 import tempfile
 import subprocess
 import logging
+import threading
+import pytest
 import torch
 import torch.nn as nn
 import numpy as np
-import requests
-import socket
-from urllib.parse import urljoin
 from torchvision import models
 
-# Import from project
-from supersayan.nn.convert import ModelType
 from supersayan.remote.client import SupersayanClient
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
@@ -32,18 +28,13 @@ def find_free_port():
 
 
 def run_server(host, port, models_dir):
-    """
-    Run the supersayan server in a separate process.
-    """
-    # Get path to the run_server.py script
+    """Run the supersayan server in a separate process."""
     script_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "scripts", "run_server.py"
     )
 
-    # Create the models directory if it doesn't exist
     os.makedirs(models_dir, exist_ok=True)
 
-    # Log the server command
     cmd = [
         sys.executable,
         script_path,
@@ -56,28 +47,22 @@ def run_server(host, port, models_dir):
     ]
     logger.info(f"Starting server with command: {' '.join(cmd)}")
 
-    # Start the server process
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        bufsize=1,  # Line buffered output
+        bufsize=1,
     )
 
-    # Monitor server startup
     start_time = time.time()
-    timeout = 30  # Allow up to 30 seconds for server to start
-
-    # Wait for server to start
-    logger.info(f"Waiting for server to start on {host}:{port}...")
+    timeout = 30
     server_url = f"http://{host}:{port}"
-
-    # Look for specific message that indicates server is running
     startup_message = f"Uvicorn running on http://{host}:{port}"
 
+    logger.info(f"Waiting for server to start on {host}:{port}...")
+
     while time.time() - start_time < timeout:
-        # Check if process is still running
         if process.poll() is not None:
             stdout, stderr = process.communicate()
             logger.error(f"Server process exited with code {process.returncode}")
@@ -87,7 +72,6 @@ def run_server(host, port, models_dir):
                 f"Server failed to start, exit code: {process.returncode}"
             )
 
-        # Read from stderr (where Uvicorn logs appear)
         line = process.stderr.readline().strip()
         if line:
             logger.warning(f"Server stderr: {line}")
@@ -95,7 +79,6 @@ def run_server(host, port, models_dir):
                 logger.info(f"Server started successfully at {server_url}")
                 break
 
-    # Start a thread to consume remaining output
     def log_server_output():
         while process.poll() is None:
             stdout = process.stdout.readline()
@@ -105,16 +88,12 @@ def run_server(host, port, models_dir):
             if stderr:
                 logger.warning(f"Server stderr: {stderr.strip()}")
 
-    import threading
-
     log_thread = threading.Thread(target=log_server_output, daemon=True)
     log_thread.start()
 
-    # Return the process if we found the startup message
     if time.time() - start_time < timeout:
         return process
 
-    # If we reach here, server didn't start within the timeout
     process.terminate()
     process.wait(timeout=5)
     stdout, stderr = process.communicate()
@@ -126,46 +105,38 @@ def run_server(host, port, models_dir):
 @pytest.fixture(scope="module")
 def server_fixture():
     """Fixture to start and stop the server for testing."""
-    # Create a temporary directory for models
     models_dir = tempfile.mkdtemp(prefix="supersayan_test_models_")
     logger.info(f"Created temporary models directory: {models_dir}")
 
     try:
-        # Server configuration
         host = "127.0.0.1"
-        port = find_free_port()  # Use a free port to avoid conflicts
+        port = find_free_port()
         server_url = f"http://{host}:{port}"
 
-        # Start server
         logger.info(f"Starting server on {host}:{port}")
         server_process = run_server(host, port, models_dir)
 
-        # Yield server URL for tests to use
         yield server_url
 
     except Exception as e:
         logger.error(f"Error in server fixture: {e}")
         raise
     finally:
-        # Cleanup: terminate the server process
         logger.info("Shutting down server")
         if "server_process" in locals():
             server_process.terminate()
             try:
                 server_process.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                # Force kill if not terminated
                 server_process.kill()
                 server_process.wait()
 
-            # Print final output
             stdout, stderr = server_process.communicate()
             if stdout:
                 logger.info(f"Final server stdout: {stdout}")
             if stderr:
                 logger.warning(f"Final server stderr: {stderr}")
 
-        # Clean up the temp directory
         try:
             import shutil
 
@@ -176,20 +147,13 @@ def server_fixture():
 
 
 def test_hybrid_house_price_regression(server_fixture):
-    """
-    Test the client-server architecture with a house price regression model.
-
-    Args:
-        server_fixture: The server URL fixture
-    """
+    """Test the client-server architecture with a house price regression model."""
     server_url = server_fixture
     logger.info(f"Testing client against server at {server_url}")
 
-    # Define a simple house price regressor model
     class HousePriceRegressor(nn.Module):
         def __init__(self):
             super().__init__()
-            # Use named modules instead of Sequential for better hybrid conversion
             self.linear1 = nn.Linear(5, 16)
             self.relu1 = nn.ReLU()
             self.dropout = nn.Dropout(0.1)
@@ -206,26 +170,20 @@ def test_hybrid_house_price_regression(server_fixture):
             x = self.linear3(x)
             return x
 
-    # Create the model
     torch_model = HousePriceRegressor()
+    test_x = torch.rand(5, 5, dtype=torch.float32)
 
-    # Test sample data
-    test_x = torch.rand(5, 5, dtype=torch.float32)  # 5 test samples
-
-    # Get predictions from original model for comparison
     torch_pred = torch_model(test_x)
     torch_values = torch_pred.detach().numpy()
 
     logger.info("Creating hybrid client...")
-    # Create a client with hybrid model (only Linear layers in FHE)
     client_hybrid = SupersayanClient(
         server_url=server_url,
         torch_model=torch_model,
-        fhe_modules=[nn.Linear],  # Convert only Linear layers to FHE
+        fhe_modules=[nn.Linear],
     )
 
     try:
-        # Perform forward pass - FHE layers run remotely, others run locally
         logger.info("Running forward pass...")
         client_hybrid_pred = client_hybrid(test_x)
         client_hybrid_values = client_hybrid_pred.detach().numpy()
@@ -235,11 +193,9 @@ def test_hybrid_house_price_regression(server_fixture):
         logger.info("Hybrid SupersayanClient model predictions:")
         logger.info(client_hybrid_values)
 
-        # Compare the results (allowing for some numerical differences due to FHE)
         mean_diff = np.mean(np.abs(torch_values - client_hybrid_values))
         logger.info(f"Mean absolute difference: {mean_diff}")
 
-        # The threshold should be adjusted based on expected precision
         assert mean_diff < 1000.0, f"Model predictions differ too much: {mean_diff}"
 
     except Exception as e:
@@ -248,27 +204,19 @@ def test_hybrid_house_price_regression(server_fixture):
 
 
 def test_hybrid_small_cnn(server_fixture):
-    """
-    Test the client-server architecture with a small convolutional network on random input.
-    Only the Conv2d layer runs in FHE.
-
-    Args:
-        server_fixture: The server URL fixture
-    """
+    """Test the client-server architecture with a small convolutional network."""
     server_url = server_fixture
     logger.info(f"Testing CNN client against server at {server_url}")
 
-    # Define a small CNN model for image classification
     class SmallCNN(nn.Module):
         def __init__(self):
             super().__init__()
-            # Keep the model very small for FHE computation
             self.conv = nn.Conv2d(
                 in_channels=1, out_channels=2, kernel_size=3, stride=1, padding=1
             )
             self.relu = nn.ReLU()
             self.flatten = nn.Flatten()
-            self.fc = nn.Linear(2 * 8 * 8, 10)  # Output 10 classes
+            self.fc = nn.Linear(2 * 8 * 8, 10)
 
         def forward(self, x):
             x = self.conv(x)
@@ -277,28 +225,20 @@ def test_hybrid_small_cnn(server_fixture):
             x = self.fc(x)
             return x
 
-    # Create the model
     torch_model = SmallCNN()
+    test_x = torch.rand(2, 1, 8, 8, dtype=torch.float32)
 
-    # Test sample data - very small random image batch (8x8 pixels)
-    test_x = torch.rand(
-        2, 1, 8, 8, dtype=torch.float32
-    )  # 2 test images, 1 channel, 8x8 pixels
-
-    # Get predictions from original model for comparison
     torch_pred = torch_model(test_x)
     torch_values = torch_pred.detach().numpy()
 
     logger.info("Creating hybrid CNN client...")
-    # Create a client with hybrid model (only Conv2d layers in FHE)
     client_hybrid = SupersayanClient(
         server_url=server_url,
         torch_model=torch_model,
-        fhe_modules=[nn.Conv2d],  # Convert only Conv2d layers to FHE
+        fhe_modules=[nn.Conv2d],
     )
 
     try:
-        # Perform forward pass - FHE Conv2d layer runs remotely, others run locally
         logger.info("Running CNN forward pass...")
         client_hybrid_pred = client_hybrid(test_x)
         client_hybrid_values = client_hybrid_pred.detach().numpy()
@@ -308,11 +248,9 @@ def test_hybrid_small_cnn(server_fixture):
         logger.info("Hybrid SupersayanClient model predictions:")
         logger.info(client_hybrid_values)
 
-        # Compare the results (allowing for some numerical differences due to FHE)
         mean_diff = np.mean(np.abs(torch_values - client_hybrid_values))
         logger.info(f"Mean absolute difference: {mean_diff}")
 
-        # The threshold should be adjusted based on expected precision
         assert mean_diff < 1.0, f"Model predictions differ too much: {mean_diff}"
 
     except Exception as e:
@@ -321,42 +259,27 @@ def test_hybrid_small_cnn(server_fixture):
 
 
 def test_resnet18_random_input(server_fixture):
-    """
-    Test the client-server architecture with a ResNet18 model on random input.
-    Only the Conv2d and Linear layers run in FHE.
-
-    Args:
-        server_fixture: The server URL fixture
-    """
+    """Test the client-server architecture with a ResNet18 model on random input."""
     server_url = server_fixture
     logger.info(f"Testing ResNet18 client against server at {server_url}")
 
-    # Load a pre-trained ResNet18 model
     torch_model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     torch_model.eval()
 
-    # Test sample data - random input
-    test_x = torch.rand(
-        1, 3, 1, 1, dtype=torch.float32
-    )  # 1 test image, 3 channels, 224x224 pixels
+    test_x = torch.rand(1, 3, 1, 1, dtype=torch.float32)
 
-    # Get predictions from original model for comparison
     torch_pred = torch_model(test_x)
     torch_values = torch_pred.detach().numpy()
 
     logger.info("Creating hybrid ResNet18 client...")
-    # Create a client with hybrid model (Conv2d and Linear layers in FHE)
     client_hybrid = SupersayanClient(
         server_url=server_url,
         torch_model=torch_model,
-        fhe_modules=[nn.Conv2d, nn.Linear],  # Convert Conv2d and Linear layers to FHE
+        fhe_modules=[nn.Conv2d, nn.Linear],
     )
 
     try:
-        # Perform forward pass - FHE layers run remotely, others run locally
         logger.info("Running ResNet18 forward pass...")
-
-        # Set a longer timeout for the test to accommodate larger data processing
         client_hybrid_pred = client_hybrid(test_x)
         client_hybrid_values = client_hybrid_pred.detach().numpy()
 
@@ -365,11 +288,9 @@ def test_resnet18_random_input(server_fixture):
         logger.info("Hybrid SupersayanClient model predictions:")
         logger.info(client_hybrid_values)
 
-        # Compare the results (allowing for some numerical differences due to FHE)
         mean_diff = np.mean(np.abs(torch_values - client_hybrid_values))
         logger.info(f"Mean absolute difference: {mean_diff}")
 
-        # The threshold should be adjusted based on expected precision
         assert mean_diff < 1.0, f"Model predictions differ too much: {mean_diff}"
 
     except Exception as e:
@@ -378,7 +299,6 @@ def test_resnet18_random_input(server_fixture):
 
 
 if __name__ == "__main__":
-    # This allows running the file directly for debugging
     with tempfile.TemporaryDirectory() as models_dir:
         host = "127.0.0.1"
         port = find_free_port()
@@ -387,11 +307,6 @@ if __name__ == "__main__":
         server_process = run_server(host, port, models_dir)
 
         try:
-            # Choose which test to run
-            # test_hybrid_house_price_regression(server_url)
-            # # Uncomment to run the CNN test
-            # test_hybrid_small_cnn(server_url)
-            # Uncomment to run the ResNet18 test
             test_resnet18_random_input(server_url)
             logger.info("Test completed successfully")
         except Exception as e:

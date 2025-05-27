@@ -1,9 +1,10 @@
 import numpy as np
 import logging
+import pytest
+
 from supersayan.core.keygen import generate_secret_key
 from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
 from supersayan.nn.layers.conv2d import Conv2d
-import pytest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -11,31 +12,28 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture(scope="module")
 def fhe_secret_key():
+    """Generate secret key fixture for FHE operations."""
     logger.info("Generating secret key (fixture)...")
     return generate_secret_key()
 
 
 def test_conv2d_layer(fhe_secret_key):
-    # Define FHE convolutional layer
+    """Test FHE Conv2d layer forward pass."""
     logger.info("Creating Conv2d layer...")
     conv = Conv2d(
         in_channels=3, out_channels=4, kernel_size=3, stride=1, padding=1, bias=True
     )
 
-    # Generate random input with batch size 1 and shape (1, 3, 8, 8)
     input_data = np.random.rand(1, 3, 8, 8).astype(np.float32)
     print("Input shape:", input_data.shape)
 
     try:
-        # Encrypt the input data
         logger.info("Encrypting input data...")
         encrypted_input = encrypt_to_lwes(input_data, fhe_secret_key)
 
-        # Forward pass through the convolutional layer
         logger.info("Processing convolutional layer...")
         output_encrypted = conv(encrypted_input)
 
-        # Decrypt the result
         logger.info("Decrypting result...")
         decrypted_output = decrypt_from_lwes(output_encrypted, fhe_secret_key)
 
@@ -45,8 +43,7 @@ def test_conv2d_layer(fhe_secret_key):
         logger.error(f"FHE convolution failed: {e}")
         raise
 
-    # Verify output has correct shape
-    expected_shape = (1, 4, 8, 8)  # Same spatial dimensions due to padding=1
+    expected_shape = (1, 4, 8, 8)
     assert (
         decrypted_output.shape == expected_shape
     ), f"Expected shape {expected_shape} but got {decrypted_output.shape}"
@@ -55,26 +52,22 @@ def test_conv2d_layer(fhe_secret_key):
 
 
 def test_conv2d_with_stride(fhe_secret_key):
-    # Define FHE convolutional layer with stride=2
+    """Test FHE Conv2d layer with stride=2."""
     logger.info("Creating Conv2d layer with stride=2...")
     conv = Conv2d(
         in_channels=3, out_channels=4, kernel_size=3, stride=2, padding=1, bias=True
     )
 
-    # Generate random input with batch size 1 and shape (1, 3, 8, 8)
     input_data = np.random.rand(1, 3, 8, 8).astype(np.float32)
     print("Input shape:", input_data.shape)
 
     try:
-        # Encrypt the input data
         logger.info("Encrypting input data...")
         encrypted_input = encrypt_to_lwes(input_data, fhe_secret_key)
 
-        # Forward pass through the convolutional layer with stride
         logger.info("Processing convolutional layer with stride...")
         output_encrypted = conv(encrypted_input)
 
-        # Decrypt the result
         logger.info("Decrypting result...")
         decrypted_output = decrypt_from_lwes(output_encrypted, fhe_secret_key)
 
@@ -87,8 +80,7 @@ def test_conv2d_with_stride(fhe_secret_key):
         logger.error(f"FHE strided convolution failed: {e}")
         raise
 
-    # Verify output has correct shape with stride=2
-    expected_shape = (1, 4, 4, 4)  # Half size in each spatial dimension
+    expected_shape = (1, 4, 4, 4)
     assert (
         decrypted_output.shape == expected_shape
     ), f"Expected shape {expected_shape} but got {decrypted_output.shape}"
@@ -101,26 +93,21 @@ def test_conv2d_with_stride(fhe_secret_key):
 #     Test a larger Conv2d layer with more output channels and a larger kernel size.
 #     This test will verify the functionality of a more complex convolutional layer.
 #     """
-#     # Define a larger FHE convolutional layer
 #     logger.info("Creating large Conv2d layer...")
 #     conv = Conv2d(
 #         in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3, bias=False
 #     )
 
-#     # Generate random input with batch size 1 and shape (1, 3, 16, 16)
 #     input_data = np.random.rand(1, 3, 224, 224).astype(np.float32)
 #     print("Input shape for large Conv2d:", input_data.shape)
 
 #     try:
-#         # Encrypt the input data
 #         logger.info("Encrypting input data for large Conv2d...")
 #         encrypted_input = encrypt_to_lwes(input_data, fhe_secret_key)
 
-#         # Forward pass through the larger convolutional layer
 #         logger.info("Processing large convolutional layer...")
 #         output_encrypted = conv(encrypted_input)
 
-#         # Decrypt the result
 #         logger.info("Decrypting result from large Conv2d...")
 #         decrypted_output = decrypt_from_lwes(output_encrypted, fhe_secret_key)
 
@@ -132,13 +119,13 @@ def test_conv2d_with_stride(fhe_secret_key):
 #         logger.error(f"FHE large convolution failed: {e}")
 #         raise
 
-#     # Verify output has correct shape
 #     expected_shape = (
 #         1,
 #         64,
 #         112,
 #         112,
-#     )  # Output shape considering stride=2 and padding=3
+#     )
+#
 #     assert (
 #         decrypted_output.shape == expected_shape
 #     ), f"Expected shape {expected_shape} but got {decrypted_output.shape}"

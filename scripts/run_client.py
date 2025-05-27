@@ -67,6 +67,7 @@ def test_resnet18_random_input(server: str = "127.0.0.1:8000") -> None:
     logger.info("ResNet‑18 – mean abs diff: %.6f", mean_diff)
     assert mean_diff < 1.0, "predictions differ too much"
 
+
 def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
     """Test a small CNN model on MNIST-like input data."""
 
