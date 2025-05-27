@@ -11,6 +11,7 @@ const SIGMA = Float32
 const KEY = AbstractArray{Float32}
 const P = Int32
 const LWE_BATCH = AbstractArray{Float32,3}
+const LWE_MATRIX = AbstractArray{Float32}
 
 """
     extract_lwe(x::LWE)::Tuple{A, B}

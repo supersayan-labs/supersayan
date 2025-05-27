@@ -48,9 +48,8 @@ def test_linear_layer(fhe_secret_key):
         logger.info("Decrypting result...")
         decrypted_output = decrypt_from_lwes(output_encrypted, fhe_secret_key)
 
-        print("\nOutput shape:", decrypted_output.shape)
-        print("Output sample (all values):")
-        print(decrypted_output)
+        logger.info("\nOutput shape:", decrypted_output.shape)
+
 
     except Exception as e:
         logger.error(f"FHE linear failed: {e}")

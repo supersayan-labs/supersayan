@@ -42,18 +42,12 @@ class Linear(nn.Module):
         )  # shape: (out_features, in_features)
         bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
         
-        logger.info(f"About to call Julia implementation directly")
         # Call Julia implementation directly
-        print(f"All of the types : input={type(input)}, weight_np={type(weight_np)}, bias_np={type(bias_np)}")
-        print(f"Shapes: input={input.shape}, weight_np={weight_np.shape}, bias_np={bias_np.shape if bias_np is not None else None}")
         julia_result = SupersayanTFHE.Layers.Linear.linear_forward(
             input, weight_np, bias_np
         )
-        logger.info(f"Julia implementation returned result")
 
-        result = np.asarray(julia_result, dtype=np.float32)
-
-        return result
+        return np.asarray(julia_result, dtype=np.float32)
 
     def __repr__(self):
         return f"Linear(in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None})"

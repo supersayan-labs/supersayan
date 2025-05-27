@@ -3,7 +3,7 @@ module Linear
 using Base.Threads
 using LinearAlgebra: BLAS
 
-import ...Types: LWE, LWE_ARRAY, LWE_BATCH, pack_lwe, extract_lwe
+import ...Types: LWE, LWE_ARRAY, LWE_MATRIX, pack_lwe, extract_lwe
 import ...Operations: add_lwe, mult_lwe, dot_product_lwe, batch_dot_product_lwe
 
 # Match BLAS threads to Julia threads
@@ -13,10 +13,10 @@ BLAS.set_num_threads(Threads.nthreads())
 Performs a linear transformation on a batch of LWE ciphertexts.
 """
 function linear_forward(
-    input::LWE_BATCH,
+    input::LWE_MATRIX,
     weights::AbstractMatrix{Float32},
     bias::Union{AbstractVector{Float32},Nothing} = nothing,
-)::LWE_BATCH
+)::LWE_MATRIX
     batch_size, in_features, lwe_dim = size(input)
     out_features = size(weights, 1)
 
