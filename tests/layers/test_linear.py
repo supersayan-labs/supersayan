@@ -1,11 +1,3 @@
-# tests/layers/test_linear.py
-
-"""
-test_linear.py
-
-A test for a linear layer using FHE operations
-"""
-
 import numpy as np
 import logging
 import pytest

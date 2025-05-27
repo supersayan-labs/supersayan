@@ -1,11 +1,3 @@
-# tests/test_conv2d.py
-
-"""
-test_conv2d.py
-
-A test for a 2D convolutional layer using FHE operations
-"""
-
 import numpy as np
 import logging
 from supersayan.core.keygen import generate_secret_key
