@@ -1,6 +1,6 @@
 import numpy as np
 
-from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
+from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
 
 np.random.seed(42)

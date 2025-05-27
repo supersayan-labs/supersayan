@@ -1,11 +1,12 @@
+from typing import List
+
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-from typing import List
-from supersayan.logging_config import get_logger
 
 from supersayan.core.bindings import SupersayanTFHE
 from supersayan.core.types import LWE
+from supersayan.logging_config import get_logger
 
 logger = get_logger(__name__)
 

@@ -1,8 +1,8 @@
+import json
 import logging
 import logging.config
 from pathlib import Path
-from typing import Optional, Dict, Any
-import json
+from typing import Any, Dict, Optional
 
 
 class ColoredFormatter(logging.Formatter):

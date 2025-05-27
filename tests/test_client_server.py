@@ -1,18 +1,19 @@
 import os
-import sys
-import time
 import socket
-import tempfile
 import subprocess
+import sys
+import tempfile
 import threading
+import time
+
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-import numpy as np
 from torchvision import models
 
+from supersayan.logging_config import configure_logging, get_logger
 from supersayan.remote.client import SupersayanClient
-from supersayan.logging_config import get_logger, configure_logging
 
 configure_logging(level="INFO", disable_file_logging=True)
 

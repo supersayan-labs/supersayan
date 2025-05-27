@@ -1,8 +1,11 @@
 import logging
-from supersayan.logging_config import get_logger
+
 import numpy as np
+
+from supersayan.logging_config import get_logger
+
 from .bindings import SupersayanTFHE
-from .types import LWE, SIGMA, MU, KEY, P
+from .types import KEY, LWE, MU, SIGMA, P
 
 logger = get_logger(__name__)
 

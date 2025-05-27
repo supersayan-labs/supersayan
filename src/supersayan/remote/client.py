@@ -1,19 +1,17 @@
 from __future__ import annotations
-import socket
-from typing import Any, Dict, Optional, Union, List, Type, cast
-import torch
+
 import pickle
-import torch.nn as nn
+import socket
+from typing import Any, Dict, List, Optional, Type, Union, cast
+
 import numpy as np
+import torch
+import torch.nn as nn
 
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
-from supersayan.nn.convert import ModelType, SupersayanModel
-from supersayan.remote.socket_utils import (
-    recv_obj,
-    send_obj,
-    REQUEST_TIMEOUT,
-)
 from supersayan.logging_config import get_logger
+from supersayan.nn.convert import ModelType, SupersayanModel
+from supersayan.remote.socket_utils import REQUEST_TIMEOUT, recv_obj, send_obj
 
 logger = get_logger(__name__)
 

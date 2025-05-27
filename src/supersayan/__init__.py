@@ -5,12 +5,9 @@ try:
 except Exception:
     pass
 
-from .core import encryption, keygen, bindings
-from .nn import layers
-from .nn.convert import (
-    SupersayanModel,
-    ModelType,
-)
-from .nn.layers import Linear, Conv2d
-from .remote import SupersayanClient, SupersayanServer, socket_utils
+from .core import bindings, encryption, keygen
 from .logging_config import configure_logging, get_logger, set_log_level
+from .nn import layers
+from .nn.convert import ModelType, SupersayanModel
+from .nn.layers import Conv2d, Linear
+from .remote import SupersayanClient, SupersayanServer, socket_utils

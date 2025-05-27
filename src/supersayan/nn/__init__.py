@@ -1,5 +1,2 @@
-from .layers import Linear, Conv2d
-from .convert import (
-    SupersayanModel,
-    ModelType,
-)
+from .convert import ModelType, SupersayanModel
+from .layers import Conv2d, Linear

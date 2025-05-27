@@ -1,9 +1,9 @@
-import torch
 import pytest
+import torch
 
-from supersayan.logging_config import get_logger, configure_logging
+from supersayan.core.encryption import decrypt, encrypt
 from supersayan.core.keygen import generate_secret_key
-from supersayan.core.encryption import encrypt, decrypt
+from supersayan.logging_config import configure_logging, get_logger
 from supersayan.nn.layers.linear import Linear
 
 configure_logging(level="INFO", disable_file_logging=True)

@@ -1,12 +1,12 @@
+import pytest
 import torch
 import torch.nn as nn
-import pytest
 
-from supersayan.logging_config import get_logger, configure_logging
-from supersayan.nn.layers.linear import Linear
-from supersayan.nn.layers.conv2d import Conv2d
+from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
-from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
+from supersayan.logging_config import configure_logging, get_logger
+from supersayan.nn.layers.conv2d import Conv2d
+from supersayan.nn.layers.linear import Linear
 
 configure_logging(level="INFO", disable_file_logging=True)
 logger = get_logger(__name__)

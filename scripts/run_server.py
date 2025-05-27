@@ -1,8 +1,10 @@
 from __future__ import annotations
+
 import argparse
 import socket
+
 from supersayan import SupersayanServer
-from supersayan.logging_config import get_logger, configure_logging
+from supersayan.logging_config import configure_logging, get_logger
 from supersayan.remote.socket_utils import recv_obj, send_obj
 
 logger = get_logger(__name__)

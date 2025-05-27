@@ -1,5 +1,6 @@
-import numpy as np
 from typing import Tuple
+
+import numpy as np
 
 A = np.ndarray[np.float32]
 B = np.float32

@@ -1,11 +1,10 @@
 import numpy as np
 import pytest
 
+from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
+from supersayan.logging_config import configure_logging, get_logger
 from supersayan.nn.layers.conv2d import Conv2d
-from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
-from supersayan.core.keygen import generate_secret_key
-from supersayan.logging_config import get_logger, configure_logging
 
 configure_logging(level="INFO", disable_file_logging=True)
 logger = get_logger(__name__)

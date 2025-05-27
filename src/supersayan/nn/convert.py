@@ -1,13 +1,16 @@
 from __future__ import annotations
+
 from enum import Enum
 from typing import List, Optional, Type, Union
+
 import numpy as np
 import torch
 import torch.nn as nn
+
+from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
-from supersayan.nn.layers import LAYER_MAPPING
-from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
 from supersayan.logging_config import get_logger
+from supersayan.nn.layers import LAYER_MAPPING
 
 logger = get_logger(__name__)
 
