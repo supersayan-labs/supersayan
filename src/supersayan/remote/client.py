@@ -193,7 +193,7 @@ class SupersayanClient(SupersayanModel):
 
             return out
 
-        torch_input = torch.from_numpy(x)        
+        torch_input = torch.from_numpy(x)
         torch_output = module(torch_input)
 
         return torch_output.detach().numpy().astype(np.float32)
@@ -215,7 +215,9 @@ class SupersayanClient(SupersayanModel):
 
         return out
 
-    def forward(self, x: np.ndarray[np.float32] | torch.Tensor) -> np.ndarray[np.float32]:
+    def forward(
+        self, x: np.ndarray[np.float32] | torch.Tensor
+    ) -> np.ndarray[np.float32]:
         """
         Forward pass.
 
@@ -231,4 +233,3 @@ class SupersayanClient(SupersayanModel):
             x = np.asarray(x, dtype=np.float32)
 
         return self._forward_hybrid(x)
-        

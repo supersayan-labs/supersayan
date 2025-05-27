@@ -68,4 +68,4 @@ end
 
 export conv2d_forward
 
-end # module
+end

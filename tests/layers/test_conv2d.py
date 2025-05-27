@@ -8,10 +8,12 @@ import pytest
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 @pytest.fixture(scope="module")
 def fhe_secret_key():
     logger.info("Generating secret key (fixture)...")
     return generate_secret_key()
+
 
 def test_conv2d_layer(fhe_secret_key):
     # Define FHE convolutional layer
@@ -92,7 +94,6 @@ def test_conv2d_with_stride(fhe_secret_key):
     ), f"Expected shape {expected_shape} but got {decrypted_output.shape}"
 
     logger.info("Strided Conv2d test completed successfully")
-
 
 
 # def test_large_conv2d_layer(fhe_secret_key):

@@ -41,9 +41,7 @@ def handle_client(
                     model_id = server.handle_upload_model_bytes(request["model_data"])
                     send_obj(conn, {"status": True, "model_id": model_id}, conn_id)
                 elif cmd == "get_model_structure":
-                    structure = server.handle_get_model_structure(
-                        request["model_id"]
-                    )
+                    structure = server.handle_get_model_structure(request["model_id"])
                     send_obj(conn, {"status": True, "structure": structure}, conn_id)
                 elif cmd == "inference":
                     output = server.handle_inference(
@@ -106,7 +104,7 @@ def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
-    
+
     serve_forever(args.host, args.port, args.models_dir)
 
 

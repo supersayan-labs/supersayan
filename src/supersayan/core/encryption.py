@@ -28,13 +28,13 @@ def encrypt_to_lwes(
     if mus.ndim > 0:
         batch_size = mus.shape[0]
         encrypted_batch = []
-        
+
         for i in range(batch_size):
             encrypted_single = encrypt_to_lwes(mus[i], key, sigma)
             encrypted_batch.append(encrypted_single)
-        
+
         return np.asarray(encrypted_batch)
-    
+
     original_shape = mus.shape
 
     mus_flattened = mus.flatten()
@@ -49,8 +49,10 @@ def encrypt_to_lwes(
     # FIXME: Make sure the reshape is good
     encrypted_np_array = np.asarray(encrypted_flat)
 
-    encrypted_np_array = np.asarray([np.asarray(x).astype(np.float32) for x in encrypted_np_array])
-    
+    encrypted_np_array = np.asarray(
+        [np.asarray(x).astype(np.float32) for x in encrypted_np_array]
+    )
+
     encrypted_np_array = encrypted_np_array.reshape((*original_shape, -1))
 
     return encrypted_np_array
@@ -78,13 +80,13 @@ def decrypt_from_lwes(
     if ciphertexts.ndim > 1:
         batch_size = ciphertexts.shape[0]
         decrypted_batch = []
-        
+
         for i in range(batch_size):
             decrypted_single = decrypt_from_lwes(ciphertexts[i], key, p)
             decrypted_batch.append(decrypted_single)
-        
+
         return np.asarray(decrypted_batch)
-    
+
     ciphertexts_np = np.asarray(ciphertexts)
 
     original_shape = ciphertexts_np.shape

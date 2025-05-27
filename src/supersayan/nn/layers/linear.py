@@ -11,13 +11,16 @@ logger = logging.getLogger(__name__)
 
 
 class Linear(nn.Module):
+    """Supersayan equivalent of torch.nn.Linear."""
+
     def __init__(self, in_features: int, out_features: int, bias: bool = True):
         super(Linear, self).__init__()
+
         self.in_features = in_features
         self.out_features = out_features
 
-        # Initialize weights and bias as torch Tensors.
         self.weight = nn.Parameter(torch.randn(out_features, in_features))
+
         if bias:
             self.bias = nn.Parameter(torch.randn(out_features))
         else:
@@ -25,24 +28,19 @@ class Linear(nn.Module):
 
     def forward(self, input: np.ndarray[LWE]) -> np.ndarray[LWE]:
         """
-        Performs the forward pass using homomorphic operations.
+        Forward pass.
 
         Args:
-            input (np.ndarray[LWE]): A NumPy array of LWE ciphertexts with shape (batch, in_features).
+            input: The input tensor
 
         Returns:
-            np.ndarray[LWE]: A NumPy array of LWE ciphertexts with shape (batch, out_features).
+            np.ndarray[LWE]: The output tensor
         """
-        logger.info(f"Linear forward pass with input shape: {input.shape}")
-        batch_size = input.shape[0]
 
-        # Detach the weight and bias parameters as plain numbers.
-        weight_np = (
-            self.weight.detach().cpu().numpy()
-        )  # shape: (out_features, in_features)
+        weight_np = self.weight.detach().cpu().numpy()
+
         bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
-        
-        # Call Julia implementation directly
+
         julia_result = SupersayanTFHE.Layers.Linear.linear_forward(
             input, weight_np, bias_np
         )
