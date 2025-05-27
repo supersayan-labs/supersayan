@@ -8,7 +8,7 @@ from supersayan.logging_config import configure_logging, get_logger
 from supersayan.nn.layers.conv2d import Conv2d
 from supersayan.nn.layers.linear import Linear
 
-configure_logging(level="INFO", disable_file_logging=True)
+configure_logging(level="INFO")
 logger = get_logger(__name__)
 
 

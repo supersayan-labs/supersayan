@@ -44,7 +44,7 @@ from supersayan import configure_logging
 configure_logging(level="DEBUG")
 
 # Disable file logging (useful for tests)
-configure_logging(level="INFO", disable_file_logging=True)
+configure_logging(level="INFO")
 
 # Custom log directory
 configure_logging(log_dir="./logs")
@@ -157,7 +157,7 @@ import pytest
 from supersayan import configure_logging, get_logger
 
 # Disable file logging for tests
-configure_logging(level="DEBUG", disable_file_logging=True)
+configure_logging(level="DEBUG")
 
 logger = get_logger(__name__)
 

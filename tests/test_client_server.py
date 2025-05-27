@@ -15,7 +15,7 @@ from torchvision import models
 from supersayan.logging_config import configure_logging, get_logger
 from supersayan.remote.client import SupersayanClient
 
-configure_logging(level="INFO", disable_file_logging=True)
+configure_logging(level="INFO")
 
 logger = get_logger(__name__)
 

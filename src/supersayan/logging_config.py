@@ -81,7 +81,7 @@ DEFAULT_CONFIG = {
     "loggers": {
         "supersayan": {
             "level": "DEBUG",
-            "handlers": ["console", "file"],
+            "handlers": ["console"],
             "propagate": False,
         }
     },
@@ -117,7 +117,7 @@ class SupersayanLogger:
         log_dir: Optional[str] = None,
         console_format: Optional[str] = None,
         file_format: Optional[str] = None,
-        disable_file_logging: bool = False,
+        disable_file_logging: bool = True,
         disable_colors: bool = False,
         config_dict: Optional[Dict[str, Any]] = None,
         config_file: Optional[str] = None,
@@ -161,6 +161,11 @@ class SupersayanLogger:
 
             if disable_file_logging:
                 self._config["loggers"]["supersayan"]["handlers"] = ["console"]
+                if "file" in self._config["handlers"]:
+                    del self._config["handlers"]["file"]
+            else:
+                if "file" not in self._config["loggers"]["supersayan"]["handlers"]:
+                    self._config["loggers"]["supersayan"]["handlers"].append("file")
 
             if disable_colors:
                 self._config["handlers"]["console"]["formatter"] = "standard"
