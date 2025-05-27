@@ -4,3 +4,110 @@
 2025-05-27 21:15:02 - supersayan.core.bindings - [34mINFO[0m - bindings.py:10 - <module>() - Loading Julia package from: /Users/tomjurien/Documents/Projects/SaCS/supersayan/src/supersayan/julia_backend
 2025-05-27 21:15:33 - supersayan.core.bindings - [34mINFO[0m - bindings.py:10 - <module>() - Loading Julia package from: /Users/tomjurien/Documents/Projects/SaCS/supersayan/src/supersayan/julia_backend
 2025-05-27 21:15:41 - supersayan.core.bindings - [34mINFO[0m - bindings.py:10 - <module>() - Loading Julia package from: /Users/tomjurien/Documents/Projects/SaCS/supersayan/src/supersayan/julia_backend
+2025-05-27 21:23:23 - supersayan.core.bindings - [34mINFO[0m - bindings.py:12 - <module>() - Loading Julia package from: /Users/tomjurien/Documents/Projects/SaCS/supersayan/src/supersayan/julia_backend
+2025-05-27 21:23:23 - supersayan.__main__ - [34mINFO[0m - run_server.py:86 - serve_forever() - Supersayan server listening on 127.0.0.1:8000
+2025-05-27 21:23:39 - supersayan.core.bindings - [34mINFO[0m - bindings.py:12 - <module>() - Loading Julia package from: /Users/tomjurien/Documents/Projects/SaCS/supersayan/src/supersayan/julia_backend
+2025-05-27 21:23:40 - supersayan.__main__ - [34mINFO[0m - run_client.py:111 - test_mnist_cnn() - MNIST CNN Model Summary:
+2025-05-27 21:23:40 - supersayan.__main__ - [34mINFO[0m - run_server.py:24 - handle_client() - Connection from 127.0.0.1:53395
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:1] Sending 831549 bytes in 1 packets, MD5=83e074056dad4df04f85a5fdab3f542a
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:1] Sending packet 1/1: 831549 bytes
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:1] Receiving object: 831549 bytes in 1 packets
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:1] Receiving packet 1/1: 831549 bytes
+2025-05-27 21:23:40 - supersayan.remote.client - [34mINFO[0m - client.py:76 - _send_request() - [CONN:1] Established connection to 127.0.0.1:8000
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:1] Trailer hash: sent=83e074056dad4df04f85a5fdab3f542a calc=83e074056dad4df04f85a5fdab3f542a
+2025-05-27 21:23:40 - supersayan.__main__ - [34mINFO[0m - run_server.py:38 - handle_client() - [CONN:1] Processing command: upload_model
+2025-05-27 21:23:40 - supersayan.remote.server - [34mINFO[0m - server.py:156 - handle_upload_model_bytes() - Handling model upload with hash: ffa19d6c270b36cb0e8452ea3866c7b9
+2025-05-27 21:23:40 - supersayan.remote.server - [34mINFO[0m - server.py:51 - save_model() - Saving model with hash: ffa19d6c270b36cb0e8452ea3866c7b9
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:1] Sending 89 bytes in 1 packets, MD5=8e88ad25568b89fb6b9ab4f0f094aeff
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:1] Sending packet 1/1: 89 bytes
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:1] Receiving object: 89 bytes in 1 packets
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:1] Receiving packet 1/1: 89 bytes
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:1] Trailer hash: sent=8e88ad25568b89fb6b9ab4f0f094aeff calc=8e88ad25568b89fb6b9ab4f0f094aeff
+2025-05-27 21:23:40 - supersayan.remote.client - [34mINFO[0m - client.py:80 - _send_request() - [CONN:1] Completed request/response cycle
+2025-05-27 21:23:40 - supersayan.__main__ - [34mINFO[0m - run_server.py:67 - handle_client() - closed connection 127.0.0.1:53395
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:2] Sending 111 bytes in 1 packets, MD5=973ba9910718537da79e47d1323d2ed3
+2025-05-27 21:23:40 - supersayan.__main__ - [34mINFO[0m - run_server.py:24 - handle_client() - Connection from 127.0.0.1:53396
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:2] Sending packet 1/1: 111 bytes
+2025-05-27 21:23:40 - supersayan.remote.client - [34mINFO[0m - client.py:76 - _send_request() - [CONN:2] Established connection to 127.0.0.1:8000
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:2] Receiving object: 111 bytes in 1 packets
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:2] Receiving packet 1/1: 111 bytes
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:2] Trailer hash: sent=973ba9910718537da79e47d1323d2ed3 calc=973ba9910718537da79e47d1323d2ed3
+2025-05-27 21:23:40 - supersayan.__main__ - [34mINFO[0m - run_server.py:38 - handle_client() - [CONN:2] Processing command: get_model_structure
+2025-05-27 21:23:40 - supersayan.remote.server - [34mINFO[0m - server.py:92 - get_model() - Model d061b5ff-c01c-4202-b8eb-82a35e4b40ae - Stored hash: ffa19d6c270b36cb0e8452ea3866c7b9, Calculated hash: ffa19d6c270b36cb0e8452ea3866c7b9
+2025-05-27 21:23:40 - supersayan.remote.server - [34mINFO[0m - server.py:109 - get_model() - Loaded model d061b5ff-c01c-4202-b8eb-82a35e4b40ae (layers: conv1, conv2, fc1, fc2)
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:2] Sending 100 bytes in 1 packets, MD5=8f55f6665a340ff94b0acd21fefd8642
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:2] Sending packet 1/1: 100 bytes
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:2] Receiving object: 100 bytes in 1 packets
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:2] Receiving packet 1/1: 100 bytes
+2025-05-27 21:23:40 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:2] Trailer hash: sent=8f55f6665a340ff94b0acd21fefd8642 calc=8f55f6665a340ff94b0acd21fefd8642
+2025-05-27 21:23:40 - supersayan.remote.client - [34mINFO[0m - client.py:80 - _send_request() - [CONN:2] Completed request/response cycle
+2025-05-27 21:23:40 - supersayan.__main__ - [34mINFO[0m - run_server.py:67 - handle_client() - closed connection 127.0.0.1:53396
+2025-05-27 21:23:41 - supersayan.__main__ - [34mINFO[0m - run_server.py:24 - handle_client() - Connection from 127.0.0.1:53399
+2025-05-27 21:23:41 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:3] Sending 5808170 bytes in 1 packets, MD5=b4774eb9aa9a1424dd054739194b3485
+2025-05-27 21:23:41 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:3] Sending packet 1/1: 5808170 bytes
+2025-05-27 21:23:41 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:3] Receiving object: 5808170 bytes in 1 packets
+2025-05-27 21:23:41 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:3] Receiving packet 1/1: 5808170 bytes
+2025-05-27 21:23:41 - supersayan.remote.client - [34mINFO[0m - client.py:76 - _send_request() - [CONN:3] Established connection to 127.0.0.1:8000
+2025-05-27 21:23:41 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:3] Trailer hash: sent=b4774eb9aa9a1424dd054739194b3485 calc=b4774eb9aa9a1424dd054739194b3485
+2025-05-27 21:23:41 - supersayan.__main__ - [34mINFO[0m - run_server.py:38 - handle_client() - [CONN:3] Processing command: inference
+2025-05-27 21:23:43 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:3] Sending 92926168 bytes in 1 packets, MD5=36650452670c0f94479361ff5aca4667
+2025-05-27 21:23:43 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:3] Sending packet 1/1: 92926168 bytes
+2025-05-27 21:23:43 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:3] Receiving object: 92926168 bytes in 1 packets
+2025-05-27 21:23:43 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:3] Receiving packet 1/1: 92926168 bytes
+2025-05-27 21:23:43 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:3] Trailer hash: sent=36650452670c0f94479361ff5aca4667 calc=36650452670c0f94479361ff5aca4667
+2025-05-27 21:23:43 - supersayan.remote.client - [34mINFO[0m - client.py:80 - _send_request() - [CONN:3] Completed request/response cycle
+2025-05-27 21:23:43 - supersayan.__main__ - [34mINFO[0m - run_server.py:67 - handle_client() - closed connection 127.0.0.1:53399
+2025-05-27 21:23:44 - supersayan.__main__ - [34mINFO[0m - run_server.py:24 - handle_client() - Connection from 127.0.0.1:53401
+2025-05-27 21:23:44 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:4] Sending 23231786 bytes in 1 packets, MD5=c2ada29b4c05e26df1bcfa115237e938
+2025-05-27 21:23:44 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:4] Sending packet 1/1: 23231786 bytes
+2025-05-27 21:23:44 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:4] Receiving object: 23231786 bytes in 1 packets
+2025-05-27 21:23:44 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:4] Receiving packet 1/1: 23231786 bytes
+2025-05-27 21:23:44 - supersayan.remote.client - [34mINFO[0m - client.py:76 - _send_request() - [CONN:4] Established connection to 127.0.0.1:8000
+2025-05-27 21:23:44 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:4] Trailer hash: sent=c2ada29b4c05e26df1bcfa115237e938 calc=c2ada29b4c05e26df1bcfa115237e938
+2025-05-27 21:23:44 - supersayan.__main__ - [34mINFO[0m - run_server.py:38 - handle_client() - [CONN:4] Processing command: inference
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:4] Sending 46463192 bytes in 1 packets, MD5=02c036990e7ee5ca14bec4209f925e7d
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:4] Sending packet 1/1: 46463192 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:4] Receiving object: 46463192 bytes in 1 packets
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:4] Receiving packet 1/1: 46463192 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:4] Trailer hash: sent=02c036990e7ee5ca14bec4209f925e7d calc=02c036990e7ee5ca14bec4209f925e7d
+2025-05-27 21:23:46 - supersayan.remote.client - [34mINFO[0m - client.py:80 - _send_request() - [CONN:4] Completed request/response cycle
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_server.py:67 - handle_client() - closed connection 127.0.0.1:53401
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_server.py:24 - handle_client() - Connection from 127.0.0.1:53403
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:5] Sending 11616036 bytes in 1 packets, MD5=0bc7e410210dded6b8f40939c2751c7a
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:5] Sending packet 1/1: 11616036 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:5] Receiving object: 11616036 bytes in 1 packets
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:5] Receiving packet 1/1: 11616036 bytes
+2025-05-27 21:23:46 - supersayan.remote.client - [34mINFO[0m - client.py:76 - _send_request() - [CONN:5] Established connection to 127.0.0.1:8000
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:5] Trailer hash: sent=0bc7e410210dded6b8f40939c2751c7a calc=0bc7e410210dded6b8f40939c2751c7a
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_server.py:38 - handle_client() - [CONN:5] Processing command: inference
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:5] Sending 948435 bytes in 1 packets, MD5=446f0776cae6f065c5b4dd6955bd76db
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:5] Sending packet 1/1: 948435 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:5] Receiving object: 948435 bytes in 1 packets
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:5] Receiving packet 1/1: 948435 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:5] Trailer hash: sent=446f0776cae6f065c5b4dd6955bd76db calc=446f0776cae6f065c5b4dd6955bd76db
+2025-05-27 21:23:46 - supersayan.remote.client - [34mINFO[0m - client.py:80 - _send_request() - [CONN:5] Completed request/response cycle
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_server.py:67 - handle_client() - closed connection 127.0.0.1:53403
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_server.py:24 - handle_client() - Connection from 127.0.0.1:53404
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:6] Sending 948515 bytes in 1 packets, MD5=d969b15515431b35fab15cfdab96d9e7
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:6] Sending packet 1/1: 948515 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:6] Receiving object: 948515 bytes in 1 packets
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:6] Receiving packet 1/1: 948515 bytes
+2025-05-27 21:23:46 - supersayan.remote.client - [34mINFO[0m - client.py:76 - _send_request() - [CONN:6] Established connection to 127.0.0.1:8000
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:6] Trailer hash: sent=d969b15515431b35fab15cfdab96d9e7 calc=d969b15515431b35fab15cfdab96d9e7
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_server.py:38 - handle_client() - [CONN:6] Processing command: inference
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:139 - send_obj() - [CONN:6] Sending 74291 bytes in 1 packets, MD5=6d99ef7496c99688b60c018b9fd1a3cf
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:151 - send_obj() - [CONN:6] Sending packet 1/1: 74291 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:70 - recv_obj() - [CONN:6] Receiving object: 74291 bytes in 1 packets
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:79 - recv_obj() - [CONN:6] Receiving packet 1/1: 74291 bytes
+2025-05-27 21:23:46 - supersayan.remote.socket_utils - [34mINFO[0m - socket_utils.py:93 - recv_obj() - [CONN:6] Trailer hash: sent=6d99ef7496c99688b60c018b9fd1a3cf calc=6d99ef7496c99688b60c018b9fd1a3cf
+2025-05-27 21:23:46 - supersayan.remote.client - [34mINFO[0m - client.py:80 - _send_request() - [CONN:6] Completed request/response cycle
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_server.py:67 - handle_client() - closed connection 127.0.0.1:53404
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_client.py:132 - test_mnist_cnn() - MNIST CNN – mean abs diff: 0.494369
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_client.py:133 - test_mnist_cnn() - MNIST CNN – max abs diff: 1.076805
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_client.py:134 - test_mnist_cnn() - MNIST CNN – PyTorch output shape: torch.Size([4, 10])
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_client.py:135 - test_mnist_cnn() - MNIST CNN – Client output shape: torch.Size([4, 10])
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_client.py:137 - test_mnist_cnn() - PyTorch predictions (first sample): tensor([-0.1431, -0.0591, -0.0914,  0.0187, -0.0924,  0.0890,  0.1043, -0.0110,
+        -0.0429, -0.0300])
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_client.py:138 - test_mnist_cnn() - Client predictions (first sample): tensor([0.3125, 0.2969, 0.3281, 0.7812, 0.9844, 0.3750, 0.5000, 0.0625, 0.1094,
+        0.1094])
+2025-05-27 21:23:46 - supersayan.__main__ - [34mINFO[0m - run_client.py:141 - test_mnist_cnn() - MNIST CNN test passed!

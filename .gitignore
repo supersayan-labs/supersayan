@@ -135,4 +135,4 @@ Manifest.toml
 prof/
 
 # Custom ignores
-# Nothing yet
+**/.CondaPkg
