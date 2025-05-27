@@ -41,12 +41,12 @@ def handle_client(
                     model_id = server.handle_upload_model_bytes(request["model_data"])
                     send_obj(conn, {"status": True, "model_id": model_id}, conn_id)
                 elif cmd == "get_model_structure":
-                    structure = server.handle_get_model_structure_simple(
+                    structure = server.handle_get_model_structure(
                         request["model_id"]
                     )
                     send_obj(conn, {"status": True, "structure": structure}, conn_id)
                 elif cmd == "inference":
-                    output = server.handle_inference_simple(
+                    output = server.handle_inference(
                         request["model_id"],
                         request["layer_name"],
                         request["encrypted_input"],

@@ -11,7 +11,7 @@ import logging
 import pytest
 
 from supersayan.core.keygen import generate_secret_key
-from supersayan.core.encryption import encrypt, decrypt
+from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
 from supersayan.nn.layers.linear import Linear as FHELinear
 from supersayan.nn.layers.conv2d import Conv2d as FHEConv2d
 
@@ -44,11 +44,11 @@ def test_verify_linear():
 
         # Generate secret key and encrypt input for FHE
         key = generate_secret_key()
-        encrypted_input = encrypt(input_data, key)
+        encrypted_input = encrypt_to_lwes(input_data, key)
 
         # Get FHE result
         encrypted_output = fhe_linear(encrypted_input)
-        fhe_output = decrypt(encrypted_output, key)
+        fhe_output = decrypt_from_lwes(encrypted_output, key)
 
         # Compare results (allowing small numerical differences)
         # Ensure both outputs are torch.Tensor and cast if needed
@@ -111,11 +111,11 @@ def test_verify_conv2d():
 
         # Generate secret key and encrypt input for FHE
         key = generate_secret_key()
-        encrypted_input = encrypt(input_data, key)
+        encrypted_input = encrypt_to_lwes(input_data, key)
 
         # Get FHE result
         encrypted_output = fhe_conv(encrypted_input)
-        fhe_output = decrypt(encrypted_output, key)
+        fhe_output = decrypt_from_lwes(encrypted_output, key)
 
         # Compare results (allowing small numerical differences)
         # Ensure both outputs are torch.Tensor and cast if needed
@@ -178,11 +178,11 @@ def test_verify_conv2d_with_stride():
 
         # Generate secret key and encrypt input for FHE
         key = generate_secret_key()
-        encrypted_input = encrypt(input_data, key)
+        encrypted_input = encrypt_to_lwes(input_data, key)
 
         # Get FHE result
         encrypted_output = fhe_conv(encrypted_input)
-        fhe_output = decrypt(encrypted_output, key)
+        fhe_output = decrypt_from_lwes(encrypted_output, key)
 
         # Compare results (allowing small numerical differences)
         # Ensure both outputs are torch.Tensor and cast if needed

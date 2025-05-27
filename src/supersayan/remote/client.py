@@ -3,7 +3,9 @@ import logging
 import socket
 from typing import Any, Dict, Optional, Union, List, Type, cast
 import torch
+import pickle
 import torch.nn as nn
+import numpy as np
 
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
@@ -175,7 +177,7 @@ class SupersayanClient(SupersayanModel):
 
             dec = decrypt_from_lwes(enc_out, self.secret_key)
 
-            return torch.tensor(dec, dtype=x.dtype, device=x.device)
+            return dec
 
         children = list(module.named_children())
 
@@ -188,7 +190,7 @@ class SupersayanClient(SupersayanModel):
 
             return out
 
-        return module(x)
+        return np.asarray(module(torch.from_numpy(x)), dtype=np.float32)
 
     def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
         """
