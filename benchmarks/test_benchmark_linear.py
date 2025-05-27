@@ -1,18 +1,13 @@
-"""
-Benchmark for the Linear layer with different input and output sizes.
-"""
-
 import torch
-import numpy as np
-import logging
 import pytest
 
+from supersayan.logging_config import get_logger, configure_logging
 from supersayan.core.keygen import generate_secret_key
 from supersayan.core.encryption import encrypt, decrypt
 from supersayan.nn.layers.linear import Linear
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+configure_logging(level="INFO", disable_file_logging=True)
+logger = get_logger(__name__)
 
 
 @pytest.mark.parametrize(

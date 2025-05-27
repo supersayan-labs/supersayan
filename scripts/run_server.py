@@ -1,12 +1,11 @@
 from __future__ import annotations
 import argparse
-import logging
 import socket
-
-from supersayan.remote.server import SupersayanServer
+from supersayan import SupersayanServer
+from supersayan.logging_config import get_logger, configure_logging
 from supersayan.remote.socket_utils import recv_obj, send_obj
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def handle_client(
@@ -101,9 +100,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-    )
+    configure_logging()
 
     serve_forever(args.host, args.port, args.models_dir)
 

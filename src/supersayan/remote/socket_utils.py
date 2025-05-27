@@ -1,12 +1,12 @@
 from __future__ import annotations
 import hashlib
-import logging
 import pickle
 import socket
 import struct
 from typing import Any, Tuple
+from supersayan.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Global connection counter
 _connection_counter = 0

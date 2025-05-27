@@ -1,5 +1,6 @@
 try:
     from ._setup import _auto_setup
+
     _auto_setup()
 except Exception:
     pass
@@ -12,3 +13,4 @@ from .nn.convert import (
 )
 from .nn.layers import Linear, Conv2d
 from .remote import SupersayanClient, SupersayanServer, socket_utils
+from .logging_config import configure_logging, get_logger, set_log_level

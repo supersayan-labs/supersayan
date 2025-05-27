@@ -1,9 +1,10 @@
 import logging
+from supersayan.logging_config import get_logger
 import numpy as np
 from .bindings import SupersayanTFHE
 from .types import LWE, SIGMA, MU, KEY, P
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def encrypt_to_lwes(

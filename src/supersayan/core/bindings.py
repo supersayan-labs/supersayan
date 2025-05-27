@@ -1,8 +1,8 @@
 import os
-import logging
 from juliacall import Main as jl
+from supersayan.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 julia_package_dir = os.path.join(current_dir, "..", "julia_backend")

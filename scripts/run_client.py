@@ -1,6 +1,5 @@
 from __future__ import annotations
 import time
-import logging
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,11 +7,14 @@ from torchsummary import summary
 from torchvision import models
 
 from supersayan.remote.client import SupersayanClient
+from supersayan.logging_config import get_logger, configure_logging
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+# Configure logging
+configure_logging(
+    level="INFO", console_format="%(asctime)s - %(levelname)s - %(message)s"
 )
-logger = logging.getLogger(__name__)
+
+logger = get_logger(__name__)
 
 
 def test_hybrid_house_price_regression(

@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import Tuple, Union
-import logging
+from supersayan.logging_config import get_logger
 
 from supersayan.core.bindings import SupersayanTFHE
 from supersayan.core.encryption import LWE
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Conv2d(nn.Module):

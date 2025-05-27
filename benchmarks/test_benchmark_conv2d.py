@@ -1,18 +1,13 @@
-"""
-Benchmark for the Conv2d layer with different input and output sizes.
-"""
-
 import torch
-import numpy as np
-import logging
 import pytest
 
 from supersayan.core.keygen import generate_secret_key
-from supersayan.core.encryption import encrypt, decrypt
+from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
 from supersayan.nn.layers.conv2d import Conv2d
+from supersayan.logging_config import get_logger, configure_logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+configure_logging(level="INFO", disable_file_logging=True)
+logger = get_logger(__name__)
 
 
 @pytest.mark.parametrize(
@@ -53,7 +48,7 @@ def test_benchmark_conv2d(
     input_data = torch.randn(batch_size, in_channels, input_size, input_size)
 
     # Encrypt the input data
-    encrypted_input = encrypt(input_data, key)
+    encrypted_input = encrypt_to_lwes(input_data, key)
 
     # Compute expected output shape
     h_out = w_out = int((input_size + 2 * padding - (kernel_size - 1) - 1) / stride + 1)
@@ -63,5 +58,5 @@ def test_benchmark_conv2d(
     result = benchmark(lambda: conv(encrypted_input))
 
     # Verify shape
-    decrypted_output = decrypt(result, key)
+    decrypted_output = decrypt_from_lwes(result, key)
     assert decrypted_output.shape == expected_shape

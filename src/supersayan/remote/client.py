@@ -1,5 +1,4 @@
 from __future__ import annotations
-import logging
 import socket
 from typing import Any, Dict, Optional, Union, List, Type, cast
 import torch
@@ -14,8 +13,9 @@ from supersayan.remote.socket_utils import (
     send_obj,
     REQUEST_TIMEOUT,
 )
+from supersayan.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SupersayanClient(SupersayanModel):
@@ -163,38 +163,37 @@ class SupersayanClient(SupersayanModel):
         """
         # Register hooks to intercept FHE layers
         hooks = []
-        
+
         def make_hook(layer_name):
             def hook(module, input, output):
                 x_np = input[0].detach().cpu().numpy().astype(np.float32)
-                
+
                 enc_in = encrypt_to_lwes(x_np, self.secret_key)
                 enc_out = self._process_layer(layer_name, enc_in)
                 dec = decrypt_from_lwes(enc_out, self.secret_key)
-                
+
                 return torch.from_numpy(dec)
+
             return hook
-        
+
         # Register hooks for all FHE modules
         for name, module in self.original_model.named_modules():
             normalized_name = name.replace(".", "_")
             if normalized_name in self.fhe_module_names:
                 hook = module.register_forward_hook(make_hook(normalized_name))
                 hooks.append(hook)
-        
+
         # Run forward pass
         with torch.no_grad():
             torch_output = self.original_model(x)
-        
+
         # Remove hooks
         for hook in hooks:
             hook.remove()
-        
+
         return torch_output
 
-    def forward(
-        self, x: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass.
 

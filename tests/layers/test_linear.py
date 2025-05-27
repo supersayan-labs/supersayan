@@ -1,13 +1,13 @@
 import numpy as np
-import logging
 import pytest
 
-from supersayan.core.keygen import generate_secret_key
-from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
 from supersayan.nn.layers.linear import Linear
+from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
+from supersayan.core.keygen import generate_secret_key
+from supersayan.logging_config import get_logger, configure_logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+configure_logging(level="INFO", disable_file_logging=True)
+logger = get_logger(__name__)
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +38,7 @@ def test_linear_layer(fhe_secret_key):
         logger.info("Decrypting result...")
         decrypted_output = decrypt_from_lwes(output_encrypted, fhe_secret_key)
 
-        logger.info("\nOutput shape:", decrypted_output.shape)
+        logger.info(f"Output shape: {decrypted_output.shape}")
 
     except Exception as e:
         logger.error(f"FHE linear failed: {e}")

@@ -1,5 +1,4 @@
 from __future__ import annotations
-import logging
 from enum import Enum
 from typing import List, Optional, Type, Union
 import numpy as np
@@ -8,8 +7,9 @@ import torch.nn as nn
 from supersayan.core.keygen import generate_secret_key
 from supersayan.nn.layers import LAYER_MAPPING
 from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
+from supersayan.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModelType(Enum):

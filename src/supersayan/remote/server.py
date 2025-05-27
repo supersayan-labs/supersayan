@@ -1,14 +1,14 @@
 from __future__ import annotations
 import hashlib
-import logging
 import os
 import pickle
 import uuid
 from typing import Any, Dict, List
 
 import torch
+from supersayan.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ModelStore:

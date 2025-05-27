@@ -4,7 +4,6 @@ import time
 import socket
 import tempfile
 import subprocess
-import logging
 import threading
 import pytest
 import torch
@@ -13,11 +12,11 @@ import numpy as np
 from torchvision import models
 
 from supersayan.remote.client import SupersayanClient
+from supersayan.logging_config import get_logger, configure_logging
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+configure_logging(level="INFO", disable_file_logging=True)
+
+logger = get_logger(__name__)
 
 
 def find_free_port():

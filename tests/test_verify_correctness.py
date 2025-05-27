@@ -1,17 +1,25 @@
 import torch
 import torch.nn as nn
-import logging
+import pytest
 
+from supersayan.logging_config import get_logger, configure_logging
+from supersayan.nn.layers.linear import Linear
+from supersayan.nn.layers.conv2d import Conv2d
 from supersayan.core.keygen import generate_secret_key
 from supersayan.core.encryption import encrypt_to_lwes, decrypt_from_lwes
-from supersayan.nn.layers.linear import Linear as FHELinear
-from supersayan.nn.layers.conv2d import Conv2d as FHEConv2d
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+configure_logging(level="INFO", disable_file_logging=True)
+logger = get_logger(__name__)
 
 
-def test_verify_linear():
+@pytest.fixture(scope="module")
+def fhe_secret_key():
+    """Generate secret key fixture for FHE operations."""
+    logger.info("Generating secret key (fixture)...")
+    return generate_secret_key()
+
+
+def test_verify_linear(fhe_secret_key):
     """Verify FHE Linear layer produces results close to PyTorch nn.Linear."""
     with torch.no_grad():
         batch_size = 2
@@ -22,14 +30,13 @@ def test_verify_linear():
 
         torch_linear = nn.Linear(in_features, out_features)
 
-        fhe_linear = FHELinear(in_features, out_features)
+        fhe_linear = Linear(in_features, out_features)
         fhe_linear.weight.data = torch_linear.weight.data.clone()
         fhe_linear.bias.data = torch_linear.bias.data.clone()
 
         torch_output = torch_linear(input_data)
 
-        key = generate_secret_key()
-        encrypted_input = encrypt_to_lwes(input_data, key)
+        encrypted_input = encrypt_to_lwes(input_data, fhe_secret_key)
 
         encrypted_output = fhe_linear(encrypted_input)
         fhe_output = decrypt_from_lwes(encrypted_output, key)
@@ -49,7 +56,7 @@ def test_verify_linear():
         assert mean_diff < 0.05, f"Mean difference too large: {mean_diff}"
 
 
-def test_verify_conv2d():
+def test_verify_conv2d(fhe_secret_key):
     """Verify FHE Conv2d layer produces results close to PyTorch nn.Conv2d."""
     with torch.no_grad():
         batch_size = 1
@@ -70,7 +77,7 @@ def test_verify_conv2d():
             bias=True,
         )
 
-        fhe_conv = FHEConv2d(
+        fhe_conv = Conv2d(
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
@@ -83,11 +90,10 @@ def test_verify_conv2d():
 
         torch_output = torch_conv(input_data)
 
-        key = generate_secret_key()
-        encrypted_input = encrypt_to_lwes(input_data, key)
+        encrypted_input = encrypt_to_lwes(input_data, fhe_secret_key)
 
         encrypted_output = fhe_conv(encrypted_input)
-        fhe_output = decrypt_from_lwes(encrypted_output, key)
+        fhe_output = decrypt_from_lwes(encrypted_output, fhe_secret_key)
 
         torch_output_tensor = torch.as_tensor(torch_output)
         fhe_output_tensor = torch.as_tensor(fhe_output)
@@ -104,7 +110,7 @@ def test_verify_conv2d():
         assert mean_diff < 0.05, f"Mean difference too large: {mean_diff}"
 
 
-def test_verify_conv2d_with_stride():
+def test_verify_conv2d_with_stride(fhe_secret_key):
     """Verify FHE Conv2d with stride produces results close to PyTorch nn.Conv2d."""
     with torch.no_grad():
         batch_size = 1
@@ -138,8 +144,7 @@ def test_verify_conv2d_with_stride():
 
         torch_output = torch_conv(input_data)
 
-        key = generate_secret_key()
-        encrypted_input = encrypt_to_lwes(input_data, key)
+        encrypted_input = encrypt_to_lwes(input_data, fhe_secret_key)
 
         encrypted_output = fhe_conv(encrypted_input)
         fhe_output = decrypt_from_lwes(encrypted_output, key)

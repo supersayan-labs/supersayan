@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 import numpy as np
 from typing import List
-import logging
+from supersayan.logging_config import get_logger
 
 from supersayan.core.bindings import SupersayanTFHE
 from supersayan.core.types import LWE
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Linear(nn.Module):
