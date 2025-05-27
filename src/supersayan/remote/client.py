@@ -155,8 +155,8 @@ class SupersayanClient(SupersayanModel):
         return response["encrypted_output"]
 
     def _hybrid_forward_module(
-        self, prefix: str, module: nn.Module, x: torch.Tensor
-    ) -> torch.Tensor:
+        self, prefix: str, module: nn.Module, x: np.ndarray[np.float32]
+    ) -> np.ndarray[np.float32]:
         """
         Recurse through module; offload FHE layers, run others locally.
 
@@ -166,14 +166,17 @@ class SupersayanClient(SupersayanModel):
             x: The input tensor
 
         Returns:
-            torch.Tensor: The output tensor
+            np.ndarray[np.float32]: The output tensor
         """
         full_name = prefix
 
-        if full_name in self.fhe_module_names:
+        # Normalize the name to match fhe_module_names format (dots replaced with underscores)
+        normalized_name = full_name.replace(".", "_")
+
+        if normalized_name in self.fhe_module_names:
             enc_in = encrypt_to_lwes(x, self.secret_key)
 
-            enc_out = self._process_layer(full_name, enc_in)
+            enc_out = self._process_layer(normalized_name, enc_in)
 
             dec = decrypt_from_lwes(enc_out, self.secret_key)
 
@@ -190,12 +193,12 @@ class SupersayanClient(SupersayanModel):
 
             return out
 
-        torch_input = torch.from_numpy(x)
+        torch_input = torch.from_numpy(x)        
         torch_output = module(torch_input)
 
         return torch_output.detach().numpy().astype(np.float32)
 
-    def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
+    def _forward_hybrid(self, x: np.ndarray[np.float32]) -> np.ndarray[np.float32]:
         """
         Hybrid forward pass.
 
@@ -203,7 +206,7 @@ class SupersayanClient(SupersayanModel):
             x: The input tensor
 
         Returns:
-            torch.Tensor: The output tensor
+            np.ndarray[np.float32]: The output tensor
         """
         out = x
 
@@ -212,7 +215,7 @@ class SupersayanClient(SupersayanModel):
 
         return out
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: np.ndarray[np.float32] | torch.Tensor) -> np.ndarray[np.float32]:
         """
         Forward pass.
 
@@ -220,8 +223,12 @@ class SupersayanClient(SupersayanModel):
             x: The input tensor
 
         Returns:
-            torch.Tensor: The output tensor
+            np.ndarray[np.float32]: The output tensor
         """
         self._upload_model_if_needed()
 
+        if not isinstance(x, np.ndarray):
+            x = np.asarray(x, dtype=np.float32)
+
         return self._forward_hybrid(x)
+        
