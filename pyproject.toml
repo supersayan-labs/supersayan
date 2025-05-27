@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "supersayan"
 version = "0.1.0"
-description = "A Python frontend for Julia SupersayanTFHE Fully Homomorphic Encryption with PyTorch-style NN modules"
+description = "A high-performance Python library for fully homomorphic encryption (FHE) in deep learning, seamlessly integrated with PyTorch."
 authors = [
-    {name = "Tom Massias Jurien de la Gravière", email = "tom.massiasjuriendelagraviere@epfl.ch"},
+    {name = "Tom Jurien de la Gravière", email = "tom.massiasjuriendelagraviere@epfl.ch"},
     {name = "Franklin Tranié", email = "franklin.tranie@epfl.ch"}
 ]
 requires-python = ">=3.9"
@@ -35,10 +35,19 @@ classifiers = [
     "Operating System :: OS Independent"
 ]
 
+[project.scripts]
+supersayan-setup = "supersayan._setup:setup_julia_deps"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["supersayan"]
-package-data = {"supersayan" = ["py.typed"]}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["supersayan*"]
+
+[tool.setuptools.package-data]
+supersayan = ["py.typed"]
+"supersayan.julia_backend" = ["Project.toml", "CondaPkg.toml", "Manifest.toml"]
 
 [tool.uv]
 

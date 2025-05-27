@@ -1,3 +1,9 @@
+try:
+    from ._setup import _auto_setup
+    _auto_setup()
+except Exception:
+    pass
+
 from .core import encryption, keygen, bindings
 from .nn import layers
 from .nn.convert import (
