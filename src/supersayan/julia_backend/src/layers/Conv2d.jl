@@ -3,6 +3,11 @@ module Conv2d
 import ...Types: LWE, LWE_ARRAY, LWE_MATRIX
 import ...Operations: add_lwe, mult_lwe
 
+using Base.Threads: @threads
+using LinearAlgebra: BLAS
+BLAS.set_num_threads(Threads.nthreads())
+
+
 function conv2d_forward(
     input::LWE_MATRIX,
     weights::AbstractArray{Float32,4},
@@ -34,32 +39,33 @@ function conv2d_forward(
     output = Array{Float32,5}(undef, N, C_out, H_out, W_out, lwe_dim)
     zero_cipher = zeros(Float32, lwe_dim)
 
-    # Convolution
-    for n = 1:N, oc = 1:C_out, oh = 0:(H_out-1), ow = 0:(W_out-1)
-        acc = zero_cipher
+    # Convolution loop
+    @threads for idx in 1:(N*C_out)
+        n  = (idx - 1) ÷ C_out + 1
+        oc = (idx - 1) % C_out + 1
 
-        g = (oc-1) ÷ cout_per_g
+        g      = (oc - 1) ÷ (C_out ÷ groups)
         ic_off = g * cin_per_g
 
-        for icg = 1:cin_per_g, kh_idx = 0:(kh-1), kw_idx = 0:(kw-1)
-            ih = oh*sh - ph + kh_idx*dh
-            iw = ow*sw - pw + kw_idx*dw
-            if 0 ≤ ih < H && 0 ≤ iw < W
-                ic = ic_off + icg
-                enc = input[n, ic, ih+1, iw+1, :]
-                wval = weights[oc, icg, kh_idx+1, kw_idx+1]
-                acc = add_lwe(acc, mult_lwe(enc, wval))
+        @inbounds for oh = 0:(H_out-1), ow = 0:(W_out-1)
+            acc = zero_cipher
+
+            for icg = 1:cin_per_g, kh_idx = 0:(kh-1), kw_idx = 0:(kw-1)
+                ih = oh*sh - ph + kh_idx*dh
+                iw = ow*sw - pw + kw_idx*dw
+                if 0 ≤ ih < H && 0 ≤ iw < W
+                    enc  = input[n, ic_off+icg, ih+1, iw+1, :]
+                    wval = weights[oc, icg, kh_idx+1, kw_idx+1]
+                    acc  = add_lwe(acc, mult_lwe(enc, wval))
+                end
             end
-        end
 
-        output[n, oc, oh+1, ow+1, :] = acc
-    end
+            # fuse bias addition here
+            if bias !== nothing
+                acc = add_lwe(acc, bias[oc])
+            end
 
-    # Optional bias
-    if bias !== nothing
-        for n = 1:N, oc = 1:C_out, h = 1:H_out, w_ = 1:W_out
-            slice = output[n, oc, h, w_, :]
-            output[n, oc, h, w_, :] = add_lwe(slice, bias[oc])
+            output[n, oc, oh+1, ow+1, :] = acc
         end
     end
 

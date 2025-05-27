@@ -30,18 +30,16 @@ function linear_forward(
 
     zero_cipher = zeros(Float32, lwe_dim)
 
-    for b = 1:batch_size
-        input_b = @view input[b, :, :]
+    # parallelize over batch examples
+    @threads for b in 1:batch_size
+        input_b = view(input, b, :, :)
 
-        for j = 1:out_features
-            weight_row = @view weights[j, :]
-            result = dot_product_lwe(input_b, weight_row, zero_cipher)
-
+        for j in 1:out_features
+            res = dot_product_lwe(input_b, view(weights, j, :), zero_cipher)
             if bias !== nothing
-                result = add_lwe(result, bias[j])
+                res = add_lwe(res, bias[j])
             end
-
-            output[b, j, :] = result
+            output[b, j, :] = res
         end
     end
 
