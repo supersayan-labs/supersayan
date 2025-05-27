@@ -6,11 +6,11 @@ using LinearAlgebra: BLAS
 import ...Types: LWE, LWE_ARRAY, LWE_MATRIX, pack_lwe, extract_lwe
 import ...Operations: add_lwe, mult_lwe, dot_product_lwe, batch_dot_product_lwe
 
-# Match BLAS threads to Julia threads
+# Match BLAS threads to Julia threads for maximum throughput
 BLAS.set_num_threads(Threads.nthreads())
 
 """
-Performs a linear transformation on a batch of LWE ciphertexts.
+Forward pass for a linear layer.
 """
 function linear_forward(
     input::LWE_MATRIX,
@@ -31,10 +31,10 @@ function linear_forward(
     zero_cipher = zeros(Float32, lwe_dim)
 
     # parallelize over batch examples
-    @threads for b in 1:batch_size
-        input_b = view(input, b, :, :)
+    @threads for b = 1:batch_size
+        input_b = view(input,b,:,:)
 
-        for j in 1:out_features
+        for j = 1:out_features
             res = dot_product_lwe(input_b, view(weights, j, :), zero_cipher)
             if bias !== nothing
                 res = add_lwe(res, bias[j])

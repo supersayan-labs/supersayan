@@ -1,13 +1,17 @@
 module Conv2d
 
+using Base.Threads: @threads
+using LinearAlgebra: BLAS
+
 import ...Types: LWE, LWE_ARRAY, LWE_MATRIX
 import ...Operations: add_lwe, mult_lwe
 
-using Base.Threads: @threads
-using LinearAlgebra: BLAS
+# Match BLAS threads to Julia threads for maximum throughput
 BLAS.set_num_threads(Threads.nthreads())
 
-
+"""
+Forward pass for a convolutional layer.
+"""
 function conv2d_forward(
     input::LWE_MATRIX,
     weights::AbstractArray{Float32,4},
@@ -40,11 +44,11 @@ function conv2d_forward(
     zero_cipher = zeros(Float32, lwe_dim)
 
     # Convolution loop
-    @threads for idx in 1:(N*C_out)
-        n  = (idx - 1) ÷ C_out + 1
+    @threads for idx = 1:(N*C_out)
+        n = (idx - 1) ÷ C_out + 1
         oc = (idx - 1) % C_out + 1
 
-        g      = (oc - 1) ÷ (C_out ÷ groups)
+        g = (oc - 1) ÷ (C_out ÷ groups)
         ic_off = g * cin_per_g
 
         @inbounds for oh = 0:(H_out-1), ow = 0:(W_out-1)
@@ -54,9 +58,9 @@ function conv2d_forward(
                 ih = oh*sh - ph + kh_idx*dh
                 iw = ow*sw - pw + kw_idx*dw
                 if 0 ≤ ih < H && 0 ≤ iw < W
-                    enc  = input[n, ic_off+icg, ih+1, iw+1, :]
+                    enc = input[n, ic_off+icg, ih+1, iw+1, :]
                     wval = weights[oc, icg, kh_idx+1, kw_idx+1]
-                    acc  = add_lwe(acc, mult_lwe(enc, wval))
+                    acc = add_lwe(acc, mult_lwe(enc, wval))
                 end
             end
 

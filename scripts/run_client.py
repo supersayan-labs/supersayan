@@ -1,4 +1,5 @@
 from __future__ import annotations
+import time
 import logging
 import numpy as np
 import torch
@@ -61,7 +62,10 @@ def test_resnet18_random_input(server: str = "127.0.0.1:8000") -> None:
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
     )
 
+    start = time.time()
     client_values = client(test_x)
+    end = time.time()
+    print(f"Time taken: {end - start} seconds")
 
     mean_diff = float(np.mean(np.abs(torch_values - client_values)))
     logger.info("ResNet‑18 – mean abs diff: %.6f", mean_diff)
@@ -113,7 +117,10 @@ def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
     )
 
+    start = time.time()
     client_values = client(test_x)
+    end = time.time()
+    print(f"Time taken: {end - start} seconds")
 
     mean_diff = float(np.mean(np.abs(torch_values - client_values)))
     max_diff = float(np.max(np.abs(torch_values - client_values)))
