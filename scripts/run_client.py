@@ -147,6 +147,6 @@ def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
 
 
 if __name__ == "__main__":
-    # test_hybrid_house_price_regression()
+    test_hybrid_house_price_regression()
     # test_resnet18_random_input()
-    test_mnist_cnn()
+    # test_mnist_cnn()
