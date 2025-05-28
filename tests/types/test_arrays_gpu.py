@@ -40,8 +40,8 @@ def test_pytorch_interop_gpu():
 def test_cupy_interop():
     """Test CuPy array interoperability."""
     # Create from CuPy array
-    cp_arr = cp.linspace(0, 1, 11, dtype=cp.float32, device="cuda")
-    st = SupersayanTensor(cp_arr, device=torch.device("cuda"))
+    cp_arr = cp.linspace(0, 1, 11, dtype=cp.float32)
+    st = SupersayanTensor(cp_arr)
     
     # Test device property
     assert st.is_cuda
