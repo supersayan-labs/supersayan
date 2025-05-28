@@ -1,7 +1,7 @@
 module Operations
 
 using Base.Threads
-using LinearAlgebra: BLAS
+using LinearAlgebra: BLASusing CUDA
 
 import ..Types: LWE, LWE_ARRAY, LWE_BATCH, pack_lwe, extract_lwe
 
@@ -40,6 +40,47 @@ Commutative form.
 add_lwe(lhs::Float32, rhs::LWE)::LWE = add_lwe(rhs, lhs)
 
 """
+GPU kernel for adding two LWE arrays
+"""
+function add_lwe_kernel!(
+    out::CuDeviceMatrix{Float32},
+    lhs::CuDeviceMatrix{Float32},
+    rhs::CuDeviceMatrix{Float32},
+)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    idy = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+
+    if idx <= size(out, 1) && idy <= size(out, 2)
+        out[idx, idy] = lhs[idx, idy] + rhs[idx, idy]
+    end
+
+    return nothing
+end
+
+"""
+GPU kernel for adding scalar to LWE array
+"""
+function add_lwe_scalar_kernel!(
+    out::CuDeviceMatrix{Float32},
+    lhs::CuDeviceMatrix{Float32},
+    rhs::Float32,
+)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    idy = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+
+    if idx <= size(out, 1) && idy <= size(out, 2)
+        # Only add scalar to b component (first column)
+        if idy == 1
+            out[idx, idy] = lhs[idx, idy] + rhs
+        else
+            out[idx, idy] = lhs[idx, idy]
+        end
+    end
+
+    return nothing
+end
+
+"""
 Add two arrays of LWE ciphertexts.
 """
 function add_lwe(lhs::LWE_ARRAY, rhs::LWE_ARRAY)::LWE_ARRAY
@@ -47,6 +88,21 @@ function add_lwe(lhs::LWE_ARRAY, rhs::LWE_ARRAY)::LWE_ARRAY
     _validate_lwe_array(lhs)
     out = Matrix{Float32}(undef, size(lhs))
     return _vector_op!(add_lwe, out, lhs, rhs)
+end
+
+"""
+Add two GPU arrays of LWE ciphertexts.
+"""
+function add_lwe(lhs::CuArray{Float32,2}, rhs::CuArray{Float32,2})::CuArray{Float32,2}
+    _validate_same_shape(lhs, rhs)
+    out = CUDA.zeros(Float32, size(lhs))
+
+    threads = (16, 16)
+    blocks = (cld(size(out, 1), threads[1]), cld(size(out, 2), threads[2]))
+
+    @cuda threads=threads blocks=blocks add_lwe_kernel!(out, lhs, rhs)
+
+    return out
 end
 
 """
@@ -61,9 +117,25 @@ function add_lwe(lhs::LWE_ARRAY, rhs::Float32)::LWE_ARRAY
 end
 
 """
+Add a GPU array of LWE ciphertexts to a plaintext scalar.
+"""
+function add_lwe(lhs::CuArray{Float32,2}, rhs::Float32)::CuArray{Float32,2}
+    _validate_scalar(rhs)
+    out = CUDA.zeros(Float32, size(lhs))
+
+    threads = (16, 16)
+    blocks = (cld(size(out, 1), threads[1]), cld(size(out, 2), threads[2]))
+
+    @cuda threads=threads blocks=blocks add_lwe_scalar_kernel!(out, lhs, rhs)
+
+    return out
+end
+
+"""
 Commutative form.
 """
 add_lwe(lhs::Float32, rhs::LWE_ARRAY)::LWE_ARRAY = add_lwe(rhs, lhs)
+add_lwe(lhs::Float32, rhs::CuArray{Float32,2})::CuArray{Float32,2} = add_lwe(rhs, lhs)
 
 """
 Apply a function element-wise to two arrays.
@@ -88,6 +160,24 @@ function _vector_op!(f, out::AbstractMatrix, a::AbstractMatrix, b::AbstractArray
         end
     end
     return out
+end
+
+"""
+GPU kernel for multiplying LWE by scalar
+"""
+function mult_lwe_scalar_kernel!(
+    out::CuDeviceMatrix{Float32},
+    lhs::CuDeviceMatrix{Float32},
+    rhs::Float32,
+)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+    idy = (blockIdx().y - 1) * blockDim().y + threadIdx().y
+
+    if idx <= size(out, 1) && idy <= size(out, 2)
+        out[idx, idy] = lhs[idx, idy] * rhs
+    end
+
+    return nothing
 end
 
 """
@@ -116,9 +206,25 @@ function mult_lwe(lhs::LWE_ARRAY, rhs::Float32)::LWE_ARRAY
 end
 
 """
+Multiply a GPU array of LWE ciphertexts to a plaintext scalar.
+"""
+function mult_lwe(lhs::CuArray{Float32,2}, rhs::Float32)::CuArray{Float32,2}
+    _validate_scalar(rhs)
+    out = CUDA.zeros(Float32, size(lhs))
+
+    threads = (16, 16)
+    blocks = (cld(size(out, 1), threads[1]), cld(size(out, 2), threads[2]))
+
+    @cuda threads=threads blocks=blocks mult_lwe_scalar_kernel!(out, lhs, rhs)
+
+    return out
+end
+
+"""
 Commutative form.
 """
 mult_lwe(lhs::Float32, rhs::LWE_ARRAY)::LWE_ARRAY = mult_lwe(rhs, lhs)
+mult_lwe(lhs::Float32, rhs::CuArray{Float32,2})::CuArray{Float32,2} = mult_lwe(rhs, lhs)
 
 """
 Compute the dot product of an array of LWE ciphertexts and an array of plaintext scalars. 
