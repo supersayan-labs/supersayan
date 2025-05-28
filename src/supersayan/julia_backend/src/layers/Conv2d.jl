@@ -104,6 +104,7 @@ function conv2d_forward_cpu(
     dilation::Tuple{Int,Int} = (1, 1),
     groups::Int = 1,
 )::AbstractArray{Float32,5}
+    println("using cpu")
     # Dimension bookkeeping
     N, C_in, H, W, lwe_dim = size(input)
     C_out, cin_per_g, kh, kw = size(weights)
@@ -171,6 +172,7 @@ function conv2d_forward_gpu(
     dilation::Tuple{Int,Int} = (1, 1),
     groups::Int = 1,
 )::CuArray{Float32,5}
+    println("using gpu")
     # Dimension bookkeeping
     N, C_in, H, W, lwe_dim = size(input)
     C_out, cin_per_g, kh, kw = size(weights)
