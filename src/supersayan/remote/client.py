@@ -12,6 +12,7 @@ from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.logging_config import get_logger
 from supersayan.nn.convert import ModelType, SupersayanModel
 from supersayan.remote.socket_utils import REQUEST_TIMEOUT, recv_obj, send_obj
+from supersayan.core.types import SupersayanTensor
 
 logger = get_logger(__name__)
 
@@ -149,7 +150,7 @@ class SupersayanClient(SupersayanModel):
 
         return response["encrypted_output"]
 
-    def _forward_hybrid(self, x: torch.Tensor) -> torch.Tensor:
+    def _forward_hybrid(self, x: torch.Tensor) -> SupersayanTensor:
         """
         Hybrid forward pass.
 
@@ -157,20 +158,20 @@ class SupersayanClient(SupersayanModel):
             x: The input tensor
 
         Returns:
-            torch.Tensor: The output tensor
+            SupersayanTensor: The output tensor
         """
         # Register hooks to intercept FHE layers
         hooks = []
 
         def make_hook(layer_name):
             def hook(module, input, output):
-                x_np = input[0].detach().cpu().numpy().astype(np.float32)
+                input_st = SupersayanTensor(input[0])
 
-                enc_in = encrypt_to_lwes(x_np, self.secret_key)
+                enc_in = encrypt_to_lwes(input_st.to_julia(), self.secret_key)
                 enc_out = self._process_layer(layer_name, enc_in)
                 dec = decrypt_from_lwes(enc_out, self.secret_key)
 
-                return torch.from_numpy(dec)
+                return SupersayanTensor._from_julia(dec)
 
             return hook
 
@@ -189,9 +190,9 @@ class SupersayanClient(SupersayanModel):
         for hook in hooks:
             hook.remove()
 
-        return torch_output
+        return SupersayanTensor(torch_output)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> SupersayanTensor:
         """
         Forward pass.
 
@@ -199,7 +200,7 @@ class SupersayanClient(SupersayanModel):
             x: The input tensor
 
         Returns:
-            torch.Tensor: The output tensor
+            SupersayanTensor: The output tensor
         """
         self._upload_model_if_needed()
 

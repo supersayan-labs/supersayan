@@ -1,111 +1,87 @@
 import logging
-
+from typing import Union
 import numpy as np
 
 from supersayan.logging_config import get_logger
 
 from .bindings import SupersayanTFHE
-from .types import KEY, LWE, MU, SIGMA, P
+from .types import KEY, LWE, MU, SIGMA, P, SupersayanTensor
 
 logger = get_logger(__name__)
 
 
 def encrypt_to_lwes(
-    mus: np.ndarray[MU], key: KEY, sigma: SIGMA = None
-) -> np.ndarray[LWE]:
+    mus: SupersayanTensor, key: KEY, sigma: SIGMA = None
+) -> SupersayanTensor:
     """
-    Convert an numpy array of float32 values to an numpy array of LWE ciphertexts.
-    Can handle both single arrays and batch inputs.
+    Convert a SupersayanTensor to a SupersayanTensor of LWE ciphertexts.
+    Can handle arrays of any dimension.
 
     Args:
-        mus: The numpy array of float32 values to encrypt. Can be:
-            - Single array: shape (d1, d2, ..., dn)
-            - Batch of arrays: shape (batch_size, d1, d2, ..., dn)
+        mus: The tensor to encrypt. Can be a SupersayanTensor of any shape.
         key: The secret key
         sigma: The noise parameter (optional)
 
     Returns:
-        np.ndarray[LWE]: An numpy array of LWE ciphertext with shape:
-            - Single array: (..., ciphertext_dim)
-            - Batch: (batch_size, ..., ciphertext_dim)
+        SupersayanTensor: A SupersayanTensor of LWE ciphertext with shape:
+            - Original shape plus ciphertext dimension at the end
+            - e.g., (d1, d2) -> (d1, d2, ciphertext_dim)
     """
-    if mus.ndim > 0:
-        batch_size = mus.shape[0]
-        encrypted_batch = []
-
-        for i in range(batch_size):
-            encrypted_single = encrypt_to_lwes(mus[i], key, sigma)
-            encrypted_batch.append(encrypted_single)
-
-        return np.asarray(encrypted_batch)
-
     original_shape = mus.shape
-
-    mus_flattened = mus.flatten()
-
+    
+    mus_flat = mus.flatten()
+    mus_julia = mus_flat.to_julia()
+    
     if sigma is not None:
-        encrypted_flat = SupersayanTFHE.Encryption.encrypt_to_lwes(
-            mus_flattened, key, sigma
+        encrypted_julia = SupersayanTFHE.Encryption.encrypt_to_lwes(
+            mus_julia, key, sigma
         )
     else:
-        encrypted_flat = SupersayanTFHE.Encryption.encrypt_to_lwes(mus_flattened, key)
-
-    # FIXME: Make sure the reshape is good
-    encrypted_np_array = np.asarray(encrypted_flat)
-
-    encrypted_np_array = np.asarray(
-        [np.asarray(x).astype(np.float32) for x in encrypted_np_array]
-    )
-
-    encrypted_np_array = encrypted_np_array.reshape((*original_shape, -1))
-
-    return encrypted_np_array
+        encrypted_julia = SupersayanTFHE.Encryption.encrypt_to_lwes(mus_julia, key)
+    
+    encrypted_tensor = SupersayanTensor._from_julia(encrypted_julia)
+    
+    ciphertext_dim = encrypted_tensor.shape[-1]
+    new_shape = (*original_shape, ciphertext_dim)
+    encrypted_tensor = encrypted_tensor.reshape(new_shape)
+    
+    return encrypted_tensor
 
 
 def decrypt_from_lwes(
-    ciphertexts: np.ndarray[LWE], key: KEY, p: P = None
-) -> np.ndarray[MU]:
+    ciphertexts: SupersayanTensor, key: KEY, p: P = None
+) -> SupersayanTensor:
     """
-    Convert an numpy array of LWE ciphertexts to an numpy array of float32 values.
-    Can handle both single arrays and batch inputs.
+    Convert a SupersayanTensor of LWE ciphertexts to a SupersayanTensor of float32 values.
+    Can handle arrays of any dimension where the last dimension is the ciphertext dimension.
 
     Args:
-        ciphertexts: The numpy array of LWE ciphertexts to decrypt. Can be:
-            - Single array: shape (..., ciphertext_dim)
-            - Batch of arrays: shape (batch_size, ..., ciphertext_dim)
+        ciphertexts: The tensor of LWE ciphertexts to decrypt. Can be a SupersayanTensor of any shape.
         key: The secret key
         p: The precision parameter (optional)
 
     Returns:
-        np.ndarray[MU]: A numpy array of float32 values with shape:
-            - Single array: original shape without ciphertext_dim
-            - Batch: (batch_size, ...) without ciphertext_dim
+        SupersayanTensor: A SupersayanTensor of float32 values with the original shape
+            (without the ciphertext dimension)
     """
-    if ciphertexts.ndim > 1:
-        batch_size = ciphertexts.shape[0]
-        decrypted_batch = []
-
-        for i in range(batch_size):
-            decrypted_single = decrypt_from_lwes(ciphertexts[i], key, p)
-            decrypted_batch.append(decrypted_single)
-
-        return np.asarray(decrypted_batch)
-
-    ciphertexts_np = np.asarray(ciphertexts)
-
-    original_shape = ciphertexts_np.shape
-
-    ciphertexts_flattened = np.reshape(ciphertexts_np, (-1, ciphertexts_np.shape[-1]))
-
+    output_shape = ciphertexts.shape[:-1]
+    ciphertext_dim = ciphertexts.shape[-1]
+    
+    n_elements = np.prod(output_shape)
+    ciphertexts_flat = ciphertexts.reshape(n_elements, ciphertext_dim)
+    ciphertexts_julia = ciphertexts_flat.to_julia()
+    
     if p is not None:
-        decrypted_values = SupersayanTFHE.Encryption.decrypt_from_lwes(
-            ciphertexts_flattened, key, p
+        decrypted_julia = SupersayanTFHE.Encryption.decrypt_from_lwes(
+            ciphertexts_julia, key, p
         )
     else:
-        decrypted_values = SupersayanTFHE.Encryption.decrypt_from_lwes(
-            ciphertexts_flattened, key
+        decrypted_julia = SupersayanTFHE.Encryption.decrypt_from_lwes(
+            ciphertexts_julia, key
         )
-
-    decrypted_np_array = np.asarray(decrypted_values).reshape(original_shape[:-1])
-
-    return decrypted_np_array
+    
+    decrypted_tensor = SupersayanTensor._from_julia(decrypted_julia)
+    
+    decrypted_tensor = decrypted_tensor.reshape(output_shape)
+    
+    return decrypted_tensor

@@ -97,7 +97,8 @@ class SupersayanTensor(torch.Tensor):
             cupy_array = jl.temp_cupy
             tensor = torch_dlpack.from_dlpack(cupy_array.toDlpack())
         else:
-            tensor = torch.as_tensor(julia_array)
+            tensor = np.asarray(julia_array)
+            tensor = torch.from_numpy(tensor)
 
         return tensor.as_subclass(cls)
 

@@ -11,6 +11,7 @@ from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
 from supersayan.logging_config import get_logger
 from supersayan.nn.layers import LAYER_MAPPING
+from supersayan.core.types import SupersayanTensor
 
 logger = get_logger(__name__)
 
@@ -158,15 +159,15 @@ class SupersayanModel(nn.Module):
             torch.Tensor: The output tensor
         """
         if self.model_type == ModelType.PURE:
-            x_np = x.detach().cpu().numpy().astype(np.float32)
+            x_st = SupersayanTensor(x)
 
-            enc = encrypt_to_lwes(x_np, self.secret_key)
+            enc = encrypt_to_lwes(x_st, self.secret_key)
 
             for name in self.fhe_module_names:
                 enc = self.modules_dict[name](enc)
 
             dec = decrypt_from_lwes(enc, self.secret_key)
 
-            return torch.from_numpy(dec)
+            return SupersayanTensor._from_julia(dec)
 
         raise NotImplementedError("Hybrid forward is implemented by SupersayanClient")
