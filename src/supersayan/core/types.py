@@ -96,6 +96,10 @@ class SupersayanTensor(torch.Tensor):
             jl.seval("temp_cupy = DLPack.share(temp_array, cupy.from_dlpack)")
             cupy_array = jl.temp_cupy
             tensor = torch_dlpack.from_dlpack(cupy_array.toDlpack())
+            
+            if tensor.ndim > 1:
+                axes = list(reversed(range(tensor.ndim)))
+                tensor = tensor.permute(axes).contiguous()
         else:
             tensor = np.asarray(julia_array)
             tensor = torch.from_numpy(tensor)
@@ -109,7 +113,11 @@ class SupersayanTensor(torch.Tensor):
         Returns:
             Any: The Julia array
         """
-        jl.temp_tensor = self
+        if self.is_cuda and self.ndim > 1:
+            axes = list(reversed(range(self.ndim)))
+            jl.temp_tensor = self.permute(axes).contiguous()
+        else:
+            jl.temp_tensor = self
 
         jl.seval("temp_julia = from_dlpack(temp_tensor)")
 

@@ -41,15 +41,7 @@ def encrypt_to_lwes(
     
     encrypted_tensor = SupersayanTensor._from_julia(encrypted_julia)
     
-    # Julia returns column-major arrays, but only GPU arrays need transposing
-    # CPU arrays from Julia->NumPy conversion handle this automatically
-    if encrypted_tensor.is_cuda:
-        # GPU arrays need transpose: (ciphertext_dim, n_messages) -> (n_messages, ciphertext_dim)
-        encrypted_tensor = encrypted_tensor.T
-    
-    # The Julia function returns a 2D array: (n_messages, ciphertext_dim)
-    # We need to reshape it to (*original_shape, ciphertext_dim)
-    n_messages, ciphertext_dim = encrypted_tensor.shape
+    _, ciphertext_dim = encrypted_tensor.shape
     new_shape = (*original_shape, ciphertext_dim)
     encrypted_tensor = encrypted_tensor.reshape(new_shape)
     
@@ -77,15 +69,7 @@ def decrypt_from_lwes(
     
     n_elements = np.prod(output_shape)
     ciphertexts_flat = ciphertexts.reshape(n_elements, ciphertext_dim)
-    
-    # For GPU arrays, we may need to transpose before sending to Julia
-    # since Julia expects column-major format
-    is_cuda = ciphertexts_flat.is_cuda
-    if is_cuda:
-        # Transpose to match Julia's expected format
-        ciphertexts_julia = ciphertexts_flat.T.to_julia()
-    else:
-        ciphertexts_julia = ciphertexts_flat.to_julia()
+    ciphertexts_julia = ciphertexts_flat.to_julia()
     
     if p is not None:
         decrypted_julia = SupersayanTFHE.Encryption.decrypt_from_lwes(
