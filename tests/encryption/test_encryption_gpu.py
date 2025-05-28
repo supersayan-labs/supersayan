@@ -4,7 +4,7 @@ import pytest
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
 from supersayan.core.types import SupersayanTensor
-from supersayan.core.bindings import cp
+from supersayan.core.bindings import cp, HAS_CUPY
 from supersayan.logging_config import configure_logging, get_logger
 
 import torch
@@ -17,6 +17,8 @@ cuda_available = torch.cuda.is_available()
 skip_cuda = pytest.mark.skipif(not cuda_available, reason="CUDA not available")
 
 np.random.seed(42)
+if HAS_CUPY:
+    cp.random.seed(42)
 
 EPSILON = 0.1
 
