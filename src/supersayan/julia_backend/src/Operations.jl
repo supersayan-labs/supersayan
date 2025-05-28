@@ -1,7 +1,8 @@
 module Operations
 
 using Base.Threads
-using LinearAlgebra: BLASusing CUDA
+using LinearAlgebra: BLAS
+using CUDA
 
 import ..Types: LWE, LWE_ARRAY, LWE_BATCH, pack_lwe, extract_lwe
 
