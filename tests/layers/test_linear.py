@@ -5,6 +5,9 @@ from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
 from supersayan.logging_config import configure_logging, get_logger
 from supersayan.nn.layers.linear import Linear
+from supersayan.core.types import SupersayanTensor
+
+import torch
 
 configure_logging(level="INFO")
 logger = get_logger(__name__)
@@ -22,10 +25,7 @@ def test_linear_layer(fhe_secret_key):
     logger.info("Creating Linear layer...")
     linear = Linear(in_features=8, out_features=4, bias=True)
 
-    weights = np.random.rand(4, 8).astype(np.float32)
-    bias = np.random.rand(4).astype(np.float32)
-
-    input_data = np.random.rand(1, 8).astype(np.float32)
+    input_data = SupersayanTensor(torch.rand(1, 8), device=torch.device("cuda"))
     print("Input shape:", input_data.shape)
 
     try:

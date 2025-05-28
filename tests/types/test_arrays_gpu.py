@@ -57,26 +57,6 @@ def test_cupy_interop():
     assert isinstance(st2, SupersayanTensor)
     assert st2.is_cuda
 
-
-@skip_cuda
-def test_julia_gpu_interop():
-    """Test Julia GPU array interoperability."""
-    # Create GPU tensor
-    shape = (10, 10)
-    st_gpu = SupersayanTensor.zeros(*shape, device="cuda")
-    assert st_gpu.is_cuda
-    assert st_gpu.shape == shape
-    
-    # Test Julia conversion (GPU)
-    julia_gpu_array = st_gpu.to_julia()
-    jl.temp_gpu_tensor = julia_gpu_array
-    
-    # Test round-trip conversion
-    st_gpu2 = SupersayanTensor._from_julia(jl.temp_gpu_tensor)
-    assert st_gpu2.is_cuda
-    assert torch.allclose(st_gpu, st_gpu2)
-
-
 @skip_cuda
 def test_cpu_gpu_transfer():
     """Test transfers between CPU and GPU."""

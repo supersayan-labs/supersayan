@@ -5,6 +5,9 @@ from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
 from supersayan.logging_config import configure_logging, get_logger
 from supersayan.nn.layers.conv2d import Conv2d
+from supersayan.core.types import SupersayanTensor
+
+import torch
 
 configure_logging(level="INFO")
 logger = get_logger(__name__)
@@ -24,7 +27,7 @@ def test_conv2d_layer(fhe_secret_key):
         in_channels=3, out_channels=4, kernel_size=3, stride=1, padding=1, bias=True
     )
 
-    input_data = np.random.rand(1, 3, 8, 8).astype(np.float32)
+    input_data = SupersayanTensor(torch.rand(1, 3, 8, 8), device=torch.device("cuda"))
     print("Input shape:", input_data.shape)
 
     try:
@@ -58,7 +61,7 @@ def test_conv2d_with_stride(fhe_secret_key):
         in_channels=3, out_channels=4, kernel_size=3, stride=2, padding=1, bias=True
     )
 
-    input_data = np.random.rand(1, 3, 8, 8).astype(np.float32)
+    input_data = SupersayanTensor(torch.rand(1, 3, 8, 8), device=torch.device("cuda"))
     print("Input shape:", input_data.shape)
 
     try:

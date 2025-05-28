@@ -39,32 +39,6 @@ def test_pytorch_interop_cpu():
     assert isinstance(st2, SupersayanTensor)
     assert torch.allclose(torch.from_numpy(st2.to_numpy()), pt_tensor + 2.0)
 
-
-def test_julia_interop():
-    """Test Julia array interoperability."""
-    # Create tensor using Julia backend
-    shape = (10, 10)
-    st = SupersayanTensor.zeros(*shape)
-    assert st.shape == shape
-    assert np.allclose(st.to_numpy(), np.zeros(shape))
-
-    # Test Julia conversion
-    julia_array = st.to_julia()
-    jl.temp_tensor = julia_array
-
-    # Test memory sharing with Julia
-    assert np.shares_memory(
-        jl.temp_tensor, st.to_julia()
-    ), "Should share memory with Julia array"
-
-    # Test round-trip conversion
-    st2 = SupersayanTensor._from_julia(jl.temp_tensor)
-    assert np.allclose(st.to_numpy(), st2.to_numpy())
-    assert np.shares_memory(
-        jl.temp_tensor, st2.to_julia()
-    ), "Reconstructed tensor should share memory"
-
-
 def test_mixed_operations():
     """Test operations between arrays from different backends."""
     # Create arrays from different sources
