@@ -39,6 +39,7 @@ def test_pytorch_interop_cpu():
     assert isinstance(st2, SupersayanTensor)
     assert torch.allclose(torch.from_numpy(st2.to_numpy()), pt_tensor + 2.0)
 
+
 def test_mixed_operations():
     """Test operations between arrays from different backends."""
     # Create arrays from different sources

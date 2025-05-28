@@ -1,5 +1,6 @@
 import logging
 from typing import Union
+
 import numpy as np
 
 from supersayan.logging_config import get_logger
@@ -28,23 +29,23 @@ def encrypt_to_lwes(
             - e.g., (d1, d2) -> (d1, d2, ciphertext_dim)
     """
     original_shape = mus.shape
-    
+
     mus_flat = mus.flatten()
     mus_julia = mus_flat.to_julia()
-    
+
     if sigma is not None:
         encrypted_julia = SupersayanTFHE.Encryption.encrypt_to_lwes(
             mus_julia, key, sigma
         )
     else:
         encrypted_julia = SupersayanTFHE.Encryption.encrypt_to_lwes(mus_julia, key)
-    
+
     encrypted_tensor = SupersayanTensor._from_julia(encrypted_julia)
-    
+
     _, ciphertext_dim = encrypted_tensor.shape
     new_shape = (*original_shape, ciphertext_dim)
     encrypted_tensor = encrypted_tensor.reshape(new_shape)
-    
+
     return encrypted_tensor
 
 
@@ -66,11 +67,11 @@ def decrypt_from_lwes(
     """
     output_shape = ciphertexts.shape[:-1]
     ciphertext_dim = ciphertexts.shape[-1]
-    
+
     n_elements = np.prod(output_shape)
     ciphertexts_flat = ciphertexts.reshape(n_elements, ciphertext_dim)
     ciphertexts_julia = ciphertexts_flat.to_julia()
-    
+
     if p is not None:
         decrypted_julia = SupersayanTFHE.Encryption.decrypt_from_lwes(
             ciphertexts_julia, key, p
@@ -79,9 +80,9 @@ def decrypt_from_lwes(
         decrypted_julia = SupersayanTFHE.Encryption.decrypt_from_lwes(
             ciphertexts_julia, key
         )
-    
+
     decrypted_tensor = SupersayanTensor._from_julia(decrypted_julia)
-    
+
     decrypted_tensor = decrypted_tensor.reshape(output_shape)
-    
+
     return decrypted_tensor

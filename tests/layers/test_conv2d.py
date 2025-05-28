@@ -1,13 +1,12 @@
 import numpy as np
 import pytest
+import torch
 
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
 from supersayan.core.keygen import generate_secret_key
+from supersayan.core.types import SupersayanTensor
 from supersayan.logging_config import configure_logging, get_logger
 from supersayan.nn.layers.conv2d import Conv2d
-from supersayan.core.types import SupersayanTensor
-
-import torch
 
 configure_logging(level="INFO")
 logger = get_logger(__name__)

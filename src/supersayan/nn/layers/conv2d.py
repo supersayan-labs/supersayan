@@ -62,7 +62,7 @@ class Conv2d(nn.Module):
 
         Returns:
             SupersayanTensor: The output tensor
-        """        
+        """
         if x.ndim != 5:
             raise ValueError(
                 f"Expected 5-D encrypted tensor (N,C,H,W,lwe_dim); got shape {x.shape}"

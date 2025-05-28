@@ -9,10 +9,10 @@ import torch
 import torch.nn as nn
 
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
+from supersayan.core.types import SupersayanTensor
 from supersayan.logging_config import get_logger
 from supersayan.nn.convert import ModelType, SupersayanModel
 from supersayan.remote.socket_utils import REQUEST_TIMEOUT, recv_obj, send_obj
-from supersayan.core.types import SupersayanTensor
 
 logger = get_logger(__name__)
 

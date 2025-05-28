@@ -96,7 +96,7 @@ class SupersayanTensor(torch.Tensor):
             jl.seval("temp_cupy = DLPack.share(temp_array, cupy.from_dlpack)")
             cupy_array = jl.temp_cupy
             tensor = torch_dlpack.from_dlpack(cupy_array.toDlpack())
-            
+
             if tensor.ndim > 1:
                 axes = list(reversed(range(tensor.ndim)))
                 tensor = tensor.permute(axes).contiguous()

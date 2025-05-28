@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from supersayan.core.bindings import SupersayanTFHE
-from supersayan.core.types import SupersayanTensor 
+from supersayan.core.types import SupersayanTensor
 from supersayan.logging_config import get_logger
 
 logger = get_logger(__name__)

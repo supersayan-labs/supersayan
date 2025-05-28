@@ -20,6 +20,7 @@ def fhe_secret_key():
     logger.info("Generating secret key (fixture)...")
     return generate_secret_key()
 
+
 def test_encryption_decryption_round_trip_cpu(fhe_secret_key):
     """Test that encryption followed by decryption returns the original values within epsilon."""
 

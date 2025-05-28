@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import time
 import json
+import time
 from datetime import datetime
 from pathlib import Path
-
-from supersayan.logging_config import configure_logging, get_logger
-from supersayan.remote.client import SupersayanClient
-from supersayan.core.types import SupersayanTensor
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torchvision import models
+
+from supersayan.core.types import SupersayanTensor
+from supersayan.logging_config import configure_logging, get_logger
+from supersayan.remote.client import SupersayanClient
 
 # Configure logging
 configure_logging(
@@ -28,7 +28,7 @@ def benchmark_hybrid_house_price_regression(
 ) -> dict:
     """Benchmark house price regression model."""
     logger.info("Starting house price regression benchmark...")
-    
+
     class HousePriceRegressor(nn.Module):
         def __init__(self) -> None:
             super().__init__()
@@ -50,10 +50,10 @@ def benchmark_hybrid_house_price_regression(
     torch_model.eval()
 
     test_x = SupersayanTensor(
-        torch.rand(num_samples, 5, device=torch.device("cuda")), 
-        device=torch.device("cuda")
+        torch.rand(num_samples, 5, device=torch.device("cuda")),
+        device=torch.device("cuda"),
     )
-    
+
     # Benchmark PyTorch
     torch_start = time.time()
     with torch.no_grad():
@@ -66,7 +66,7 @@ def benchmark_hybrid_house_price_regression(
     client = SupersayanClient(
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Linear]
     )
-    
+
     client_start = time.time()
     client_values = client(test_x)
     client_end = time.time()
@@ -83,26 +83,28 @@ def benchmark_hybrid_house_price_regression(
         "client_time": client_time,
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
-    
-    logger.info(f"House price regression - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)")
+
+    logger.info(
+        f"House price regression - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
+    )
     return result
 
 
 def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> dict:
     """Benchmark ResNet18 model."""
     logger.info("Starting ResNet18 benchmark...")
-    
+
     torch_model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
     torch_model.to("cuda")
     torch_model.eval()
 
     test_x = SupersayanTensor(
-        torch.rand(num_samples, 3, 224, 224, device=torch.device("cuda")), 
-        device=torch.device("cuda")
+        torch.rand(num_samples, 3, 224, 224, device=torch.device("cuda")),
+        device=torch.device("cuda"),
     )
-    
+
     # Benchmark PyTorch
     torch_start = time.time()
     with torch.no_grad():
@@ -132,10 +134,12 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
         "client_time": client_time,
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
-    
-    logger.info(f"ResNet18 - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)")
+
+    logger.info(
+        f"ResNet18 - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
+    )
     return result
 
 
@@ -174,8 +178,8 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
     torch_model.eval()
 
     test_x = SupersayanTensor(
-        torch.randn(num_samples, 1, 28, 28, device=torch.device("cuda")), 
-        device=torch.device("cuda")
+        torch.randn(num_samples, 1, 28, 28, device=torch.device("cuda")),
+        device=torch.device("cuda"),
     )
 
     # Benchmark PyTorch
@@ -207,10 +211,12 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
         "client_time": client_time,
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
     }
-    
-    logger.info(f"MNIST CNN - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)")
+
+    logger.info(
+        f"MNIST CNN - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
+    )
     return result
 
 
@@ -221,10 +227,12 @@ def run_benchmarks(server: str = "127.0.0.1:8000") -> None:
         "system_info": {
             "server_url": server,
             "cuda_available": torch.cuda.is_available(),
-            "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
-        }
+            "cuda_device": (
+                torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
+            ),
+        },
     }
-    
+
     # Run benchmarks
     try:
         # House price regression with 10 samples
@@ -233,56 +241,47 @@ def run_benchmarks(server: str = "127.0.0.1:8000") -> None:
         )
     except Exception as e:
         logger.error(f"House price regression benchmark failed: {e}")
-        results["benchmarks"].append({
-            "model": "HousePriceRegressor",
-            "error": str(e)
-        })
-    
+        results["benchmarks"].append({"model": "HousePriceRegressor", "error": str(e)})
+
     try:
         # ResNet18 with 1 sample
-        results["benchmarks"].append(
-            benchmark_resnet18(server, num_samples=1)
-        )
+        results["benchmarks"].append(benchmark_resnet18(server, num_samples=1))
     except Exception as e:
         logger.error(f"ResNet18 benchmark failed: {e}")
-        results["benchmarks"].append({
-            "model": "ResNet18",
-            "error": str(e)
-        })
-    
+        results["benchmarks"].append({"model": "ResNet18", "error": str(e)})
+
     try:
         # MNIST CNN with 1 sample
-        results["benchmarks"].append(
-            benchmark_mnist_cnn(server, num_samples=1)
-        )
+        results["benchmarks"].append(benchmark_mnist_cnn(server, num_samples=1))
     except Exception as e:
         logger.error(f"MNIST CNN benchmark failed: {e}")
-        results["benchmarks"].append({
-            "model": "MNIST_CNN",
-            "error": str(e)
-        })
-    
+        results["benchmarks"].append({"model": "MNIST_CNN", "error": str(e)})
+
     # Save results
     output_file = Path("benchmark_results.json")
     with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
-    
+
     logger.info(f"Benchmark results saved to {output_file}")
-    
+
     # Print summary
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("BENCHMARK SUMMARY")
-    print("="*60)
+    print("=" * 60)
     for benchmark in results["benchmarks"]:
         if "error" not in benchmark:
             print(f"\n{benchmark['model']}:")
             print(f"  Samples: {benchmark['num_samples']}")
-            print(f"  PyTorch time: {benchmark['torch_time']:.4f}s ({benchmark['torch_time_per_sample']:.4f}s/sample)")
-            print(f"  Client time: {benchmark['client_time']:.4f}s ({benchmark['client_time_per_sample']:.4f}s/sample)")
+            print(
+                f"  PyTorch time: {benchmark['torch_time']:.4f}s ({benchmark['torch_time_per_sample']:.4f}s/sample)"
+            )
+            print(
+                f"  Client time: {benchmark['client_time']:.4f}s ({benchmark['client_time_per_sample']:.4f}s/sample)"
+            )
             print(f"  Speedup: {benchmark['speedup']:.2f}x")
         else:
             print(f"\n{benchmark['model']}: FAILED - {benchmark['error']}")
-    print("="*60)
+    print("=" * 60)
 
 
 if __name__ == "__main__":
