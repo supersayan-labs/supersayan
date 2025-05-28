@@ -41,7 +41,9 @@ def encrypt_to_lwes(
     
     encrypted_tensor = SupersayanTensor._from_julia(encrypted_julia)
     
-    ciphertext_dim = encrypted_tensor.shape[-1]
+    # The Julia function returns a 2D array: (n_messages, ciphertext_dim)
+    # We need to reshape it to (*original_shape, ciphertext_dim)
+    n_messages, ciphertext_dim = encrypted_tensor.shape
     new_shape = (*original_shape, ciphertext_dim)
     encrypted_tensor = encrypted_tensor.reshape(new_shape)
     
