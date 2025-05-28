@@ -23,6 +23,7 @@ def setup_julia_deps():
             jl.seval(
                 f"""
             using Pkg
+            Pkg.Registry.update()
             Pkg.activate("{julia_backend}")
             Pkg.instantiate()
             println("✓ Julia dependencies installed successfully!")
