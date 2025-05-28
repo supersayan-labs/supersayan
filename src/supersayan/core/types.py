@@ -121,6 +121,9 @@ class SupersayanTensor(torch.Tensor):
         Returns:
             np.ndarray: The NumPy array
         """
+        if self.is_cuda:
+            return self.cpu().numpy()
+
         return self.detach().numpy()
 
     @property
