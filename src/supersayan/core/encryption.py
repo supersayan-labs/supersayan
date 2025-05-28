@@ -42,7 +42,12 @@ def encrypt_to_lwes(
         encrypted_julia = SupersayanTFHE.Encryption.encrypt_to_lwes(mus_julia, key)
     
     encrypted_tensor = SupersayanTensor._from_julia(encrypted_julia)
-    logger.info(f"Encrypted tensor shape: {encrypted_tensor.shape}")
+    logger.info(f"Encrypted tensor shape before transpose: {encrypted_tensor.shape}")
+    
+    # Julia returns column-major arrays, so we need to transpose for row-major Python
+    # Julia returns (ciphertext_dim, n_messages) but we want (n_messages, ciphertext_dim)
+    encrypted_tensor = encrypted_tensor.T
+    logger.info(f"Encrypted tensor shape after transpose: {encrypted_tensor.shape}")
     
     # The Julia function returns a 2D array: (n_messages, ciphertext_dim)
     # We need to reshape it to (*original_shape, ciphertext_dim)
