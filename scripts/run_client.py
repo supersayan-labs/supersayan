@@ -60,6 +60,7 @@ def benchmark_hybrid_house_price_regression(
         torch_values = torch_model(test_x)
     torch_end = time.time()
     torch_time = torch_end - torch_start
+    torch_time_per_sample = torch_time / num_samples
 
     # Benchmark client
     client = SupersayanClient(
@@ -70,6 +71,7 @@ def benchmark_hybrid_house_price_regression(
     client_values = client(test_x)
     client_end = time.time()
     client_time = client_end - client_start
+    client_time_per_sample = client_time / num_samples
 
     result = {
         "model": "HousePriceRegressor",
@@ -77,12 +79,14 @@ def benchmark_hybrid_house_price_regression(
         "input_shape": list(test_x.shape),
         "output_shape": list(client_values.shape),
         "torch_time": torch_time,
+        "torch_time_per_sample": torch_time_per_sample,
         "client_time": client_time,
+        "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
         "timestamp": datetime.now().isoformat()
     }
     
-    logger.info(f"House price regression - PyTorch time: {torch_time:.4f}s, Client time: {client_time:.4f}s")
+    logger.info(f"House price regression - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)")
     return result
 
 
@@ -105,6 +109,7 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
         torch_values = torch_model(test_x)
     torch_end = time.time()
     torch_time = torch_end - torch_start
+    torch_time_per_sample = torch_time / num_samples
 
     # Benchmark client
     client = SupersayanClient(
@@ -115,6 +120,7 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
     client_values = client(test_x)
     client_end = time.time()
     client_time = client_end - client_start
+    client_time_per_sample = client_time / num_samples
 
     result = {
         "model": "ResNet18",
@@ -122,12 +128,14 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
         "input_shape": list(test_x.shape),
         "output_shape": list(client_values.shape),
         "torch_time": torch_time,
+        "torch_time_per_sample": torch_time_per_sample,
         "client_time": client_time,
+        "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
         "timestamp": datetime.now().isoformat()
     }
     
-    logger.info(f"ResNet18 - PyTorch time: {torch_time:.4f}s, Client time: {client_time:.4f}s")
+    logger.info(f"ResNet18 - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)")
     return result
 
 
@@ -176,6 +184,7 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
         torch_values = torch_model(test_x)
     torch_end = time.time()
     torch_time = torch_end - torch_start
+    torch_time_per_sample = torch_time / num_samples
 
     # Benchmark client
     client = SupersayanClient(
@@ -186,6 +195,7 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
     client_values = client(test_x)
     client_end = time.time()
     client_time = client_end - client_start
+    client_time_per_sample = client_time / num_samples
 
     result = {
         "model": "MNIST_CNN",
@@ -193,12 +203,14 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
         "input_shape": list(test_x.shape),
         "output_shape": list(client_values.shape),
         "torch_time": torch_time,
+        "torch_time_per_sample": torch_time_per_sample,
         "client_time": client_time,
+        "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
         "timestamp": datetime.now().isoformat()
     }
     
-    logger.info(f"MNIST CNN - PyTorch time: {torch_time:.4f}s, Client time: {client_time:.4f}s")
+    logger.info(f"MNIST CNN - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)")
     return result
 
 
@@ -265,8 +277,8 @@ def run_benchmarks(server: str = "127.0.0.1:8000") -> None:
         if "error" not in benchmark:
             print(f"\n{benchmark['model']}:")
             print(f"  Samples: {benchmark['num_samples']}")
-            print(f"  PyTorch time: {benchmark['torch_time']:.4f}s")
-            print(f"  Client time: {benchmark['client_time']:.4f}s")
+            print(f"  PyTorch time: {benchmark['torch_time']:.4f}s ({benchmark['torch_time_per_sample']:.4f}s/sample)")
+            print(f"  Client time: {benchmark['client_time']:.4f}s ({benchmark['client_time_per_sample']:.4f}s/sample)")
             print(f"  Speedup: {benchmark['speedup']:.2f}x")
         else:
             print(f"\n{benchmark['model']}: FAILED - {benchmark['error']}")
