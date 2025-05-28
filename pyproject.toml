@@ -23,7 +23,6 @@ dependencies = [
     "torchvision",
     "websocket-client>=1.8.0",
     "torchsummary>=1.5.1",
-    "black>=25.1.0",
     "scalene>=1.5.51",
     "python-socketio>=5.13.0",
     "simple-websocket>=1.1.0",
@@ -47,7 +46,7 @@ include = ["supersayan*"]
 
 [tool.setuptools.package-data]
 supersayan = ["py.typed"]
-"supersayan.julia_backend" = ["Project.toml", "CondaPkg.toml", "Manifest.toml"]
+"supersayan.julia_backend" = ["Project.toml", "Manifest.toml"]
 
 [tool.uv]
 

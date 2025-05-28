@@ -1,5 +1,0 @@
-[deps]
-LinearAlgebra = ""
-PyCall = ""
-PythonCall = ""
-Random = "" 
