@@ -18,7 +18,7 @@ def test_pytorch_interop_gpu():
     """Test PyTorch tensor interoperability on GPU."""
     # Create from PyTorch CUDA tensor
     pt_tensor = torch.linspace(0, 1, 11, dtype=torch.float32, device="cuda")
-    st = SupersayanTensor(pt_tensor)
+    st = SupersayanTensor(pt_tensor, device=torch.device("cuda"))
 
     # Test device property
     assert st.is_cuda
@@ -40,8 +40,8 @@ def test_pytorch_interop_gpu():
 def test_cupy_interop():
     """Test CuPy array interoperability."""
     # Create from CuPy array
-    cp_arr = cp.linspace(0, 1, 11, dtype=cp.float32)
-    st = SupersayanTensor(cp_arr)
+    cp_arr = cp.linspace(0, 1, 11, dtype=cp.float32, device="cuda")
+    st = SupersayanTensor(cp_arr, device=torch.device("cuda"))
     
     # Test device property
     assert st.is_cuda
@@ -63,7 +63,7 @@ def test_julia_gpu_interop():
     """Test Julia GPU array interoperability."""
     # Create GPU tensor
     shape = (10, 10)
-    st_gpu = SupersayanTensor.zeros(*shape, device='cuda')
+    st_gpu = SupersayanTensor.zeros(*shape, device="cuda")
     assert st_gpu.is_cuda
     assert st_gpu.shape == shape
     
@@ -91,7 +91,7 @@ def test_cpu_gpu_transfer():
     assert torch.allclose(st_cpu, st_gpu.cpu())
     
     # Create directly on GPU
-    gpu_data = torch.randn(5, 5, dtype=torch.float32, device='cuda')
+    gpu_data = torch.randn(5, 5, dtype=torch.float32, device="cuda")
     st_gpu2 = SupersayanTensor(gpu_data)
     assert st_gpu2.is_cuda
     
@@ -106,7 +106,7 @@ def test_mixed_device_operations():
     """Test operations between tensors on different devices."""
     # Create tensors on different devices
     st_cpu = SupersayanTensor.ones(5, 5)
-    st_gpu = SupersayanTensor.ones(5, 5, device='cuda')
+    st_gpu = SupersayanTensor.ones(5, 5, device="cuda")
     
     assert st_cpu.is_cpu
     assert st_gpu.is_cuda
@@ -115,14 +115,14 @@ def test_mixed_device_operations():
     # This will move CPU tensor to GPU
     result = st_gpu + st_cpu.cuda()
     assert result.is_cuda
-    assert torch.allclose(result, torch.ones(5, 5, device='cuda') * 2)
+    assert torch.allclose(result, torch.ones(5, 5, device="cuda") * 2)
 
 
 @skip_cuda
 def test_gpu_memory_sharing():
     """Test memory sharing on GPU."""
     # Create GPU tensor
-    pt_gpu = torch.randn(10, 10, dtype=torch.float32, device='cuda')
+    pt_gpu = torch.randn(10, 10, dtype=torch.float32, device="cuda")
     st_gpu = SupersayanTensor(pt_gpu)
     
     # Check that they share the same underlying storage
@@ -137,7 +137,7 @@ def test_gpu_memory_sharing():
 @skip_cuda
 def test_gpu_constructors():
     """Test GPU tensor constructors."""
-    device = 'cuda'
+    device = "cuda"
     
     # Test zeros
     st_zeros = SupersayanTensor.zeros(5, 5, device=device)
@@ -159,7 +159,7 @@ def test_gpu_constructors():
 def test_dlpack_gpu():
     """Test DLPack interface on GPU."""
     # Create GPU tensor
-    st_gpu = SupersayanTensor.randn(10, 10, device='cuda')
+    st_gpu = SupersayanTensor.randn(10, 10, device="cuda")
     
     # Export via DLPack
     dlpack = st_gpu.to_dlpack()
@@ -180,10 +180,10 @@ def test_device_mismatch_error():
     """Test that device mismatch raises appropriate error."""
     # This should work - creating from CPU tensor with GPU device specified
     cpu_tensor = torch.randn(5, 5)
-    st_gpu = SupersayanTensor(cpu_tensor, device=torch.device('cuda'))
+    st_gpu = SupersayanTensor(cpu_tensor, device=torch.device("cuda"))
     assert st_gpu.is_cuda
     
     # This should raise an error - tensor already on different device
-    gpu_tensor = torch.randn(5, 5, device='cuda')
+    gpu_tensor = torch.randn(5, 5, device="cuda")
     with pytest.raises(ValueError, match="Device mismatch"):
-        SupersayanTensor(gpu_tensor, device=torch.device('cpu'))
+        SupersayanTensor(gpu_tensor, device=torch.device("cpu"))
