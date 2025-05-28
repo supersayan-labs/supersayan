@@ -36,10 +36,15 @@ def test_encryption_decryption_round_trip_gpu(fhe_secret_key):
         SupersayanTensor(cp.random.random((2, 3, 4)).astype(np.float32), device=torch.device("cuda")),
     ]
 
-    for original in test_cases:
+    for i, original in enumerate(test_cases):
+        print(f"\nTest case {i+1}, shape: {original.shape}")
+        print(f"Original values sample: {original.flatten()[:5].cpu().numpy()}")
+        
         encrypted = encrypt_to_lwes(original, fhe_secret_key)
+        print(f"Encrypted shape: {encrypted.shape}")
 
         decrypted = decrypt_from_lwes(encrypted, fhe_secret_key)
+        print(f"Decrypted values sample: {decrypted.flatten()[:5].cpu().numpy()}")
 
         assert (
             original.shape == decrypted.shape

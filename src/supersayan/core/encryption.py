@@ -77,7 +77,15 @@ def decrypt_from_lwes(
     
     n_elements = np.prod(output_shape)
     ciphertexts_flat = ciphertexts.reshape(n_elements, ciphertext_dim)
-    ciphertexts_julia = ciphertexts_flat.to_julia()
+    
+    # For GPU arrays, we may need to transpose before sending to Julia
+    # since Julia expects column-major format
+    is_cuda = ciphertexts_flat.is_cuda
+    if is_cuda:
+        # Transpose to match Julia's expected format
+        ciphertexts_julia = ciphertexts_flat.T.to_julia()
+    else:
+        ciphertexts_julia = ciphertexts_flat.to_julia()
     
     if p is not None:
         decrypted_julia = SupersayanTFHE.Encryption.decrypt_from_lwes(
