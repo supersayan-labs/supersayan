@@ -91,6 +91,7 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
     logger.info("Starting ResNet18 benchmark...")
     
     torch_model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1)
+    torch_model.to("cuda")
     torch_model.eval()
 
     test_x = SupersayanTensor(
