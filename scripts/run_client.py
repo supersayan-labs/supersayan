@@ -106,13 +106,14 @@ def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
             return x
 
     torch_model = MNISTNet()
+    torch_model.to("cpu")
     torch_model.eval()
 
     logger.info("MNIST CNN Model Summary:")
     print(summary(torch_model, (1, 28, 28)))
 
     batch_size = 4
-    test_x = torch.rand(batch_size, 1, 28, 28)
+    test_x = torch.rand(batch_size, 1, 28, 28, device="cpu")
 
     with torch.no_grad():
         torch_values = torch_model(test_x)
