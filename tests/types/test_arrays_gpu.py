@@ -179,7 +179,7 @@ def test_dlpack_gpu():
 def test_device_mismatch_error():
     """Test that device mismatch raises appropriate error."""
     # This should work - creating from CPU tensor with GPU device specified
-    cpu_tensor = torch.randn(5, 5)
+    cpu_tensor = torch.randn(5, 5, device="cuda")
     st_gpu = SupersayanTensor(cpu_tensor, device=torch.device("cuda"))
     assert st_gpu.is_cuda
     

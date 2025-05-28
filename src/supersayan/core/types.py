@@ -49,17 +49,14 @@ class SupersayanTensor(torch.Tensor):
         Returns:
             SupersayanTensor: A new SupersayanTensor instance
         """
+        if data.dtype == torch.Tensor and data.device != device:
+            raise ValueError(f"Device mismatch: {data.device} != {device}")
+
         if isinstance(data, torch.Tensor):
-            # Check for device mismatch only if tensor is already on a different device
-            if data.device != device and data.device.type != 'cpu':
-                raise ValueError(f"Device mismatch: tensor is on {data.device} but requested {device}")
-            
             tensor = data
-            # Move to the requested device if needed
-            if tensor.device != device:
-                tensor = tensor.to(device)
         elif isinstance(data, np.ndarray):
             tensor = torch.from_numpy(data)
+
             if device is not None:
                 tensor = tensor.to(device)
         elif HAS_CUPY and isinstance(data, cp.ndarray):
