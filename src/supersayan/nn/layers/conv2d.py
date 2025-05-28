@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from supersayan.core.bindings import SupersayanTFHE
-from supersayan.core.encryption import LWE
+from supersayan.core.types import SupersayanTensor
 from supersayan.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -53,7 +53,7 @@ class Conv2d(nn.Module):
             else None
         )
 
-    def forward(self, x: np.ndarray[LWE]) -> np.ndarray[LWE]:
+    def forward(self, x: SupersayanTensor) -> SupersayanTensor:
         """
         Forward pass.
 
@@ -61,8 +61,8 @@ class Conv2d(nn.Module):
             x: The input tensor
 
         Returns:
-            np.ndarray[LWE]: The output tensor
-        """
+            SupersayanTensor: The output tensor
+        """        
         if x.ndim != 5:
             raise ValueError(
                 f"Expected 5-D encrypted tensor (N,C,H,W,lwe_dim); got shape {x.shape}"
@@ -76,8 +76,8 @@ class Conv2d(nn.Module):
         weight_np = self.weight.detach().cpu().numpy()
         bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
 
-        y = SupersayanTFHE.Layers.Conv2d.conv2d_forward(
-            x,
+        julia_result = SupersayanTFHE.Layers.Conv2d.conv2d_forward(
+            x.to_julia(),
             weight_np,
             bias_np,
             self.stride,
@@ -86,7 +86,9 @@ class Conv2d(nn.Module):
             self.groups,
         )
 
-        return np.asarray(y, dtype=np.float32)
+        y = SupersayanTensor._from_julia(julia_result)
+
+        return y
 
     def __repr__(self):
         return (

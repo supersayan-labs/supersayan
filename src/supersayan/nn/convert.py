@@ -168,6 +168,6 @@ class SupersayanModel(nn.Module):
 
             dec = decrypt_from_lwes(enc, self.secret_key)
 
-            return SupersayanTensor._from_julia(dec)
+            return dec
 
         raise NotImplementedError("Hybrid forward is implemented by SupersayanClient")

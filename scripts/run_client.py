@@ -4,6 +4,7 @@ import time
 
 from supersayan.logging_config import configure_logging, get_logger
 from supersayan.remote.client import SupersayanClient
+from supersayan.core.types import SupersayanTensor
 
 import numpy as np
 import torch
@@ -39,8 +40,11 @@ def test_hybrid_house_price_regression(
             return self.linear3(x)
 
     torch_model = HousePriceRegressor()
+    torch_model.to("cpu")
+    torch_model.eval()
+
     num_samples = 100
-    test_x = torch.rand(num_samples, 5)
+    test_x = SupersayanTensor(torch.rand(num_samples, 5), device=torch.device("cpu"))
     torch_values = torch_model(test_x)
 
     client = SupersayanClient(
@@ -48,7 +52,7 @@ def test_hybrid_house_price_regression(
     )
     client_values = client(test_x)
 
-    mean_diff = float(np.mean(np.abs(torch_values - client_values)))
+    mean_diff = float(np.mean(np.abs(torch_values.to_numpy() - client_values.to_numpy())))
     logger.info("House‑price regression – mean abs diff (first 10): %.6f", mean_diff)
     assert mean_diff < 1000.0, "model predictions differ too much"
 
@@ -72,7 +76,7 @@ def test_resnet18_random_input(server: str = "127.0.0.1:8000") -> None:
     print(f"Time taken: {end - start} seconds")
 
     mean_diff = float(np.mean(np.abs(torch_values - client_values)))
-    logger.info("ResNet‑18 – mean abs diff: %.6f", mean_diff)
+    logger.info("ResNet-18 – mean abs diff: %.6f", mean_diff)
     assert mean_diff < 1.0, "predictions differ too much"
 
 
@@ -113,7 +117,7 @@ def test_mnist_cnn(server: str = "127.0.0.1:8000") -> None:
     # print(summary(torch_model, (1, 28, 28)))
 
     batch_size = 4
-    test_x = torch.rand(batch_size, 1, 28, 28, device="cpu")
+    test_x = SupersayanTensor(np.random.randn(batch_size, 1, 28, 28).astype(np.float32), device=torch.device("cpu"))
 
     with torch.no_grad():
         torch_values = torch_model(test_x)

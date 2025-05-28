@@ -113,11 +113,8 @@ class SupersayanTensor(torch.Tensor):
         Returns:
             Any: The Julia array
         """
-        if self.is_cuda and self.ndim > 1:
-            axes = list(reversed(range(self.ndim)))
-            jl.temp_tensor = self.permute(axes).contiguous()
-        else:
-            jl.temp_tensor = self
+        axes = list(reversed(range(self.ndim)))
+        jl.temp_tensor = self.permute(axes).contiguous()
 
         jl.seval("temp_julia = from_dlpack(temp_tensor)")
 
@@ -131,7 +128,7 @@ class SupersayanTensor(torch.Tensor):
             np.ndarray: The NumPy array
         """
         if self.is_cuda:
-            return self.cpu().numpy()
+            return self.detach().cpu().numpy()
 
         return self.detach().numpy()
 

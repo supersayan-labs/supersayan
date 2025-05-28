@@ -167,11 +167,11 @@ class SupersayanClient(SupersayanModel):
             def hook(module, input, output):
                 input_st = SupersayanTensor(input[0])
 
-                enc_in = encrypt_to_lwes(input_st.to_julia(), self.secret_key)
+                enc_in = encrypt_to_lwes(input_st, self.secret_key)
                 enc_out = self._process_layer(layer_name, enc_in)
                 dec = decrypt_from_lwes(enc_out, self.secret_key)
 
-                return SupersayanTensor._from_julia(dec)
+                return dec
 
             return hook
 

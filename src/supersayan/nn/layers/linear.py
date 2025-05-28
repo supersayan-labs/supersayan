@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 from supersayan.core.bindings import SupersayanTFHE
-from supersayan.core.types import LWE
+from supersayan.core.types import SupersayanTensor 
 from supersayan.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +27,7 @@ class Linear(nn.Module):
         else:
             self.register_parameter("bias", None)
 
-    def forward(self, input: np.ndarray[LWE]) -> np.ndarray[LWE]:
+    def forward(self, input: SupersayanTensor) -> SupersayanTensor:
         """
         Forward pass.
 
@@ -35,7 +35,7 @@ class Linear(nn.Module):
             input: The input tensor
 
         Returns:
-            np.ndarray[LWE]: The output tensor
+            SupersayanTensor: The output tensor
         """
 
         weight_np = self.weight.detach().cpu().numpy()
@@ -43,10 +43,10 @@ class Linear(nn.Module):
         bias_np = self.bias.detach().cpu().numpy() if self.bias is not None else None
 
         julia_result = SupersayanTFHE.Layers.Linear.linear_forward(
-            input, weight_np, bias_np
+            input.to_julia(), weight_np, bias_np
         )
 
-        return np.asarray(julia_result, dtype=np.float32)
+        return SupersayanTensor._from_julia(julia_result)
 
     def __repr__(self):
         return f"Linear(in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None})"
