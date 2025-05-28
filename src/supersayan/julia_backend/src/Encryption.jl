@@ -46,28 +46,58 @@ function encrypt_kernel!(
     ct::CuDeviceMatrix{Float32},
     mus::CuDeviceVector{Float32},
     key::CuDeviceVector{Float32},
+    rand_a::CuDeviceMatrix{Float32},
+    rand_e::CuDeviceVector{Float32},
     sigma::Float32,
     n_key::Int32,
 )
     idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
 
     if idx <= length(mus)
-        # Generate random values for this ciphertext
-        # Note: This is a simplified approach. In production, you'd want to use proper GPU random number generation
-        Random.seed!(idx)
-
-        # Compute a values
+        # Compute inner product of key and random a values
         a_sum = 0.0f0
         for j = 1:n_key
-            a_val = real_to_torus(rand(Float32))
-            ct[idx, j+1] = a_val
+            a_val = real_to_torus(rand_a[idx, j])
+            ct[idx, j+1] = a_val  # Store a values starting from column 2
             a_sum += key[j] * a_val
         end
 
         # Compute b with noise
-        e = sigma * randn(Float32)
+        e = sigma * rand_e[idx]
         b = real_to_torus(mus[idx] + a_sum + e)
-        ct[idx, 1] = b
+        ct[idx, 1] = b  # Store b in first column
+    end
+
+    return nothing
+end
+
+"""
+GPU kernel for decrypting multiple LWE ciphertexts in parallel
+"""
+function decrypt_kernel!(
+    decrypted::CuDeviceVector{Float32},
+    ciphertexts::CuDeviceMatrix{Float32},
+    key::CuDeviceVector{Float32},
+    p::Int32,
+    n_key::Int32,
+)
+    idx = (blockIdx().x - 1) * blockDim().x + threadIdx().x
+
+    if idx <= length(decrypted)
+        # Extract b and compute inner product with key
+        b = ciphertexts[idx, 1]
+        a_sum = 0.0f0
+
+        for j = 1:n_key
+            a_sum += key[j] * ciphertexts[idx, j+1]
+        end
+
+        # Compute phase and project to discrete torus
+        phase = real_to_torus(b - a_sum)
+        discrete = real_to_torus(round(phase * p) / p)
+
+        # Convert back to real [0,1)
+        decrypted[idx] = torus_to_real(discrete)
     end
 
     return nothing
@@ -107,13 +137,25 @@ function encrypt_to_lwes_gpu(
     ct = CUDA.zeros(Float32, n_messages, n)
 
     # Convert key to GPU if needed
-    key_gpu = CuArray(key)
+    key_gpu = isa(key, CuArray) ? key : CuArray(key)
 
-    # For now, we'll use a simple approach: copy to CPU, encrypt, copy back
-    # This avoids the scalar indexing issue but isn't optimal for performance
-    mus_cpu = Array(mus)
-    ct_cpu = encrypt_to_lwes_cpu(mus_cpu, key, sigma)
-    copyto!(ct, ct_cpu)
+    # Generate random numbers on GPU
+    rand_a = CUDA.rand(Float32, n_messages, n_key)
+    rand_e = CUDA.randn(Float32, n_messages)
+
+    # Launch kernel
+    threads = 256
+    blocks = cld(n_messages, threads)
+
+    @cuda threads=threads blocks=blocks encrypt_kernel!(
+        ct,
+        mus,
+        key_gpu,
+        rand_a,
+        rand_e,
+        sigma,
+        Int32(n_key),
+    )
 
     return ct
 end
@@ -164,11 +206,28 @@ function decrypt_from_lwes_gpu(
     key::KEY,
     p::P = Constants.p,
 )::CuArray{MU}
-    # For now, copy to CPU, decrypt, and copy back
-    # This avoids scalar indexing issues
-    ciphertexts_cpu = Array(ciphertexts)
-    decrypted_cpu = decrypt_from_lwes_cpu(ciphertexts_cpu, key, p)
-    return CuArray(decrypted_cpu)
+    n_messages = size(ciphertexts, 1)
+    n_key = size(ciphertexts, 2) - 1
+
+    # Allocate output on GPU
+    decrypted = CUDA.zeros(Float32, n_messages)
+
+    # Convert key to GPU if needed
+    key_gpu = isa(key, CuArray) ? key : CuArray(key)
+
+    # Launch kernel
+    threads = 256
+    blocks = cld(n_messages, threads)
+
+    @cuda threads=threads blocks=blocks decrypt_kernel!(
+        decrypted,
+        ciphertexts,
+        key_gpu,
+        p,
+        Int32(n_key),
+    )
+
+    return decrypted
 end
 
 """
