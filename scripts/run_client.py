@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import time
 
+from supersayan.logging_config import configure_logging, get_logger
+from supersayan.remote.client import SupersayanClient
+
 import numpy as np
 import torch
 import torch.nn as nn
 from torchsummary import summary
 from torchvision import models
-
-from supersayan.logging_config import configure_logging, get_logger
-from supersayan.remote.client import SupersayanClient
 
 # Configure logging
 configure_logging(
