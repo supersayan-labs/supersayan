@@ -23,7 +23,11 @@ def setup_julia_deps():
             jl.seval(
                 f"""
             using Pkg
-            Pkg.Registry.update()
+            Pkg.add("PythonCall")
+            Pkg.add("DLPack")
+            Pkg.add("LinearAlgebra")
+            Pkg.add("CUDA")
+            Pkg.add("Random")
             Pkg.activate("{julia_backend}")
             Pkg.instantiate()
             println("✓ Julia dependencies installed successfully!")
