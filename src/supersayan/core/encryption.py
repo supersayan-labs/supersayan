@@ -28,10 +28,8 @@ def encrypt_to_lwes(
             - e.g., (d1, d2) -> (d1, d2, ciphertext_dim)
     """
     original_shape = mus.shape
-    logger.info(f"Original shape: {original_shape}")
     
     mus_flat = mus.flatten()
-    logger.info(f"Flattened shape: {mus_flat.shape}")
     mus_julia = mus_flat.to_julia()
     
     if sigma is not None:
@@ -42,19 +40,17 @@ def encrypt_to_lwes(
         encrypted_julia = SupersayanTFHE.Encryption.encrypt_to_lwes(mus_julia, key)
     
     encrypted_tensor = SupersayanTensor._from_julia(encrypted_julia)
-    logger.info(f"Encrypted tensor shape before transpose: {encrypted_tensor.shape}")
     
-    # Julia returns column-major arrays, so we need to transpose for row-major Python
-    # Julia returns (ciphertext_dim, n_messages) but we want (n_messages, ciphertext_dim)
-    encrypted_tensor = encrypted_tensor.T
-    logger.info(f"Encrypted tensor shape after transpose: {encrypted_tensor.shape}")
+    # Julia returns column-major arrays, but only GPU arrays need transposing
+    # CPU arrays from Julia->NumPy conversion handle this automatically
+    if encrypted_tensor.is_cuda:
+        # GPU arrays need transpose: (ciphertext_dim, n_messages) -> (n_messages, ciphertext_dim)
+        encrypted_tensor = encrypted_tensor.T
     
     # The Julia function returns a 2D array: (n_messages, ciphertext_dim)
     # We need to reshape it to (*original_shape, ciphertext_dim)
     n_messages, ciphertext_dim = encrypted_tensor.shape
     new_shape = (*original_shape, ciphertext_dim)
-    logger.info(f"Attempting to reshape from {encrypted_tensor.shape} to {new_shape}")
-    logger.info(f"Total elements in encrypted: {encrypted_tensor.numel()}, expected: {np.prod(new_shape)}")
     encrypted_tensor = encrypted_tensor.reshape(new_shape)
     
     return encrypted_tensor
