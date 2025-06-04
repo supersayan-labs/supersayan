@@ -136,3 +136,4 @@ prof/
 
 # Custom ignores
 **/.CondaPkg
+report/

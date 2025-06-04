@@ -1,35 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import socket
 
 from supersayan import SupersayanServer
 from supersayan.logging_config import configure_logging, get_logger
 
 logger = get_logger(__name__)
-
-
-def serve_forever(host: str, port: int, models_dir: str) -> None:
-    """
-    Serve forever.
-
-    Args:
-        host: The host to bind to
-        port: The port to bind to
-        models_dir: The directory to store models
-    """
-    server = SupersayanServer(storage_dir=models_dir)
-
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind((host, port))
-        s.listen()
-
-        logger.info("Supersayan server listening on %s:%s", host, port)
-
-        while True:
-            conn, addr = s.accept()
-            server.handle_client(conn, addr)
 
 
 def main() -> None:
@@ -46,7 +22,9 @@ def main() -> None:
 
     configure_logging()
 
-    serve_forever(args.host, args.port, args.models_dir)
+    server = SupersayanServer(storage_dir=args.models_dir)
+
+    server.listen(args.host, args.port)
 
 
 if __name__ == "__main__":

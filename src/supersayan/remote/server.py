@@ -254,3 +254,22 @@ class SupersayanServer:
         finally:
             conn.close()
             logger.info("closed connection %s:%s", *addr)
+
+    def listen(self, host: str, port: int) -> None:
+        """
+        Listen for incoming connections.
+
+        Args:
+            host: The host to bind to
+            port: The port to bind to
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((host, port))
+            s.listen()
+
+            logger.info("Supersayan server listening on %s:%s", host, port)
+
+            while True:
+                conn, addr = s.accept()
+                self.handle_client(conn, addr)
