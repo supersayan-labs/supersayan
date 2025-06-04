@@ -3,11 +3,13 @@ from __future__ import annotations
 import hashlib
 import os
 import pickle
+import socket
 import uuid
 from typing import Any, Dict, List
 
 import torch
 
+from supersayan.remote.socket_utils import recv_obj, send_obj
 from supersayan.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -196,3 +198,59 @@ class SupersayanServer:
         encrypted_output = layer(encrypted_input)
 
         return encrypted_output
+    
+    def handle_client(
+        self, conn: socket.socket, addr: tuple[str, int]
+    ) -> None:
+        """
+        Handle a client connection.
+
+        Args:
+            conn: The socket connection
+            addr: The address of the client
+            server: The server instance
+        """
+        logger.info("Connection from %s:%s", *addr)
+
+        try:
+            while True:
+                try:
+                    request, conn_id = recv_obj(conn)
+                except ConnectionError:
+                    break
+
+                if not isinstance(request, dict) or "command" not in request:
+                    send_obj(conn, {"status": False, "error": "invalid request"}, conn_id)
+                    continue
+
+                cmd = request["command"]
+                logger.info(f"[CONN:{conn_id}] Processing command: {cmd}")
+
+                try:
+                    if cmd == "upload_model":
+                        model_id = self.handle_upload_model_bytes(request["model_data"])
+                        send_obj(conn, {"status": True, "model_id": model_id}, conn_id)
+                    elif cmd == "get_model_structure":
+                        structure = self.handle_get_model_structure(request["model_id"])
+                        send_obj(conn, {"status": True, "structure": structure}, conn_id)
+                    elif cmd == "inference":
+                        output = self.handle_inference(
+                            request["model_id"],
+                            request["layer_name"],
+                            request["encrypted_input"],
+                        )
+                        send_obj(
+                            conn, {"status": True, "encrypted_output": output}, conn_id
+                        )
+                    else:
+                        send_obj(
+                            conn,
+                            {"status": False, "error": f"unknown command: {cmd}"},
+                            conn_id,
+                        )
+                except Exception as exc:
+                    logger.exception(f"[CONN:{conn_id}] Error handling command {cmd}")
+                    send_obj(conn, {"status": False, "error": str(exc)}, conn_id)
+        finally:
+            conn.close()
+            logger.info("closed connection %s:%s", *addr)
