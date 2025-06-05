@@ -206,8 +206,6 @@ class SupersayanServer:
         inference_end = time.time()
         inference_time = inference_end - inference_start
 
-        exit()
-
         return encrypted_output, inference_time
     
     def handle_client(
