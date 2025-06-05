@@ -98,6 +98,7 @@ class SupersayanClient(SupersayanModel):
             # Receive the response
             client_receive_timestamp = time.time()
             response, _ = recv_obj(sock)
+            client_receive_timestamp = time.time()  # Capture timestamp AFTER receiving
             
             logger.info(f"[CONN:{conn_id}] Completed request/response cycle")
         finally:

@@ -167,8 +167,8 @@ class SupersayanServer:
             dummy_key = keygen.generate_secret_key()
 
             # Create small dummy tensors for warmup
-            dummy_input_1d = SupersayanTensor(torch.randn(4).float())
-            dummy_input_2d = SupersayanTensor(torch.randn(1, 3, 8, 8).float())
+            dummy_input_1d = SupersayanTensor(torch.randn(4).float(), device="cuda")
+            dummy_input_2d = SupersayanTensor(torch.randn(1, 3, 8, 8).float(), device="cuda")
 
             # Warmup encryption/decryption
             logger.info("Warming up encryption operations...")
@@ -178,14 +178,14 @@ class SupersayanServer:
             # Warmup Linear layer
             logger.info("Warming up Linear layer operations...")
             dummy_linear = Linear(4, 2)
-            linear_input = SupersayanTensor(torch.randn(1, 4).float())
+            linear_input = SupersayanTensor(torch.randn(1, 4).float(), device="cuda")
             encrypted_linear_input = encryption.encrypt_to_lwes(linear_input, dummy_key)
             _ = dummy_linear(encrypted_linear_input)
 
             # Warmup Conv2d layer
             logger.info("Warming up Conv2d layer operations...")
             dummy_conv = Conv2d(3, 16, kernel_size=3, padding=1)
-            conv_input = SupersayanTensor(torch.randn(1, 3, 8, 8).float())
+            conv_input = SupersayanTensor(torch.randn(1, 3, 8, 8).float(), device="cuda")
             encrypted_conv_input = encryption.encrypt_to_lwes(conv_input, dummy_key)
             _ = dummy_conv(encrypted_conv_input)
 
