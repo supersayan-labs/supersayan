@@ -126,7 +126,7 @@ class SupersayanModel(nn.Module):
                     out.bias.data.copy_(module.bias.data)
 
                 return out
-            if isinstance(module, nn.Conv2d):
+            elif isinstance(module, nn.Conv2d):
                 out = cls(
                     module.in_channels,
                     module.out_channels,
@@ -143,6 +143,9 @@ class SupersayanModel(nn.Module):
                     out.bias.data.copy_(module.bias.data)
 
                 return out
+            elif isinstance(module, nn.GELU):
+                # GELU has no parameters to copy, just create with same approximate setting
+                return cls(approximate=module.approximate)
         elif isinstance(module, nn.Sequential):
             return nn.Sequential(*(self._convert_module(m) for m in module))
         else:

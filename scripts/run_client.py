@@ -45,7 +45,7 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1, ena
     client = SupersayanClient(
         server_url=server, 
         torch_model=torch_model, 
-        fhe_modules=[nn.Conv2d, nn.Linear],
+        fhe_modules=[nn.Conv2d, nn.Linear, nn.ReLU],
         enable_timing=enable_timing
     )
 
@@ -147,7 +147,7 @@ def run_detailed_timing_benchmarks(server: str = "127.0.0.1:8000") -> None:
 
     benchmarks = [
         ("Warmup", lambda: benchmark_resnet18(server, num_samples=1)),
-        ("ResNet18 (Detailed)", lambda: benchmark_resnet18(server, num_samples=5, enable_timing=True)),
+        # ("ResNet18 (Detailed)", lambda: benchmark_resnet18(server, num_samples=5, enable_timing=True)),
     ]
 
     for name, benchmark_func in benchmarks:
