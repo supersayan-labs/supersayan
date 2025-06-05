@@ -22,6 +22,59 @@ configure_logging(
 logger = get_logger(__name__)
 
 
+def print_timing_details(timing_summary: dict, model_name: str) -> None:
+    """Print detailed timing breakdown."""
+    print(f"\n{'='*60}")
+    print(f"DETAILED TIMING BREAKDOWN - {model_name}")
+    print(f"{'='*60}")
+    
+    # FHE Layers
+    if timing_summary['fhe_layers']:
+        print(f"\nFHE LAYERS:")
+        print(f"{'Layer':<20} {'Encrypt':<10} {'Send':<10} {'Inference':<10} {'Receive':<10} {'Decrypt':<10} {'In Size':<12} {'Out Size':<12}")
+        print("-" * 110)
+        
+        for layer_name, metrics in timing_summary['fhe_layers'].items():
+            print(f"{layer_name:<20} "
+                  f"{metrics['avg_encryption_time']*1000:>8.2f}ms "
+                  f"{metrics['avg_send_time']*1000:>8.2f}ms "
+                  f"{metrics['avg_inference_time']*1000:>8.2f}ms "
+                  f"{metrics['avg_receive_time']*1000:>8.2f}ms "
+                  f"{metrics['avg_decryption_time']*1000:>8.2f}ms "
+                  f"{metrics['avg_encrypted_input_size']:>10.0f}B "
+                  f"{metrics['avg_encrypted_output_size']:>10.0f}B")
+    
+    # Non-FHE Layers  
+    if timing_summary['non_fhe_layers']:
+        print(f"\nNON-FHE LAYERS:")
+        print(f"{'Layer':<20} {'Torch Time':<12}")
+        print("-" * 35)
+        
+        for layer_name, metrics in timing_summary['non_fhe_layers'].items():
+            print(f"{layer_name:<20} {metrics['avg_torch_inference_time']*1000:>10.2f}ms")
+    
+    # Totals
+    totals = timing_summary['totals']
+    print(f"\nTOTALS (averaged across {totals['total_samples']} samples):")
+    print("-" * 50)
+    print(f"Total Encryption Time:     {totals['avg_total_encryption_time']*1000:>8.2f}ms")
+    print(f"Total Send Time:           {totals['avg_total_send_time']*1000:>8.2f}ms") 
+    print(f"Total Inference Time:      {totals['avg_total_inference_time']*1000:>8.2f}ms")
+    print(f"Total Receive Time:        {totals['avg_total_receive_time']*1000:>8.2f}ms")
+    print(f"Total Decryption Time:     {totals['avg_total_decryption_time']*1000:>8.2f}ms")
+    print(f"Total Torch Inference:     {totals['avg_total_torch_inference_time']*1000:>8.2f}ms")
+    
+    total_fhe_time = (totals['avg_total_encryption_time'] + 
+                      totals['avg_total_send_time'] + 
+                      totals['avg_total_inference_time'] + 
+                      totals['avg_total_receive_time'] + 
+                      totals['avg_total_decryption_time'])
+    total_time = total_fhe_time + totals['avg_total_torch_inference_time']
+    
+    print(f"Total FHE Pipeline Time:   {total_fhe_time*1000:>8.2f}ms")
+    print(f"TOTAL TIME:                {total_time*1000:>8.2f}ms")
+
+
 def benchmark_hybrid_house_price_regression(
     server: str = "127.0.0.1:8000",
     num_samples: int = 10,
@@ -62,16 +115,25 @@ def benchmark_hybrid_house_price_regression(
     torch_time = torch_end - torch_start
     torch_time_per_sample = torch_time / num_samples
 
-    # Benchmark client
+    # Benchmark client with detailed timing
     client = SupersayanClient(
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Linear]
     )
 
+    # Reset timing before benchmarking
+    client.reset_timing()
+    
     client_start = time.time()
     client_values = client(test_x)
     client_end = time.time()
     client_time = client_end - client_start
     client_time_per_sample = client_time / num_samples
+
+    # Get detailed timing summary
+    timing_summary = client.get_timing_summary()
+    
+    # Print detailed timing breakdown
+    print_timing_details(timing_summary, "HousePriceRegressor")
 
     result = {
         "model": "HousePriceRegressor",
@@ -84,6 +146,7 @@ def benchmark_hybrid_house_price_regression(
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
         "timestamp": datetime.now().isoformat(),
+        "detailed_timing": timing_summary,  # Add detailed timing data
     }
 
     logger.info(
@@ -113,16 +176,25 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
     torch_time = torch_end - torch_start
     torch_time_per_sample = torch_time / num_samples
 
-    # Benchmark client
+    # Benchmark client with detailed timing
     client = SupersayanClient(
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
     )
+
+    # Reset timing before benchmarking
+    client.reset_timing()
 
     client_start = time.time()
     client_values = client(test_x)
     client_end = time.time()
     client_time = client_end - client_start
     client_time_per_sample = client_time / num_samples
+
+    # Get detailed timing summary
+    timing_summary = client.get_timing_summary()
+    
+    # Print detailed timing breakdown
+    print_timing_details(timing_summary, "ResNet18")
 
     result = {
         "model": "ResNet18",
@@ -135,6 +207,7 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
         "timestamp": datetime.now().isoformat(),
+        "detailed_timing": timing_summary,  # Add detailed timing data
     }
 
     logger.info(
@@ -190,16 +263,25 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
     torch_time = torch_end - torch_start
     torch_time_per_sample = torch_time / num_samples
 
-    # Benchmark client
+    # Benchmark client with detailed timing
     client = SupersayanClient(
         server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
     )
+
+    # Reset timing before benchmarking
+    client.reset_timing()
 
     client_start = time.time()
     client_values = client(test_x)
     client_end = time.time()
     client_time = client_end - client_start
     client_time_per_sample = client_time / num_samples
+
+    # Get detailed timing summary
+    timing_summary = client.get_timing_summary()
+    
+    # Print detailed timing breakdown
+    print_timing_details(timing_summary, "MNIST_CNN")
 
     result = {
         "model": "MNIST_CNN",
@@ -212,6 +294,7 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
         "timestamp": datetime.now().isoformat(),
+        "detailed_timing": timing_summary,  # Add detailed timing data
     }
 
     logger.info(
@@ -279,6 +362,17 @@ def run_benchmarks(server: str = "127.0.0.1:8000") -> None:
                 f"  Client time: {benchmark['client_time']:.4f}s ({benchmark['client_time_per_sample']:.4f}s/sample)"
             )
             print(f"  Speedup: {benchmark['speedup']:.2f}x")
+            
+            # Add timing breakdown summary
+            if "detailed_timing" in benchmark:
+                timing = benchmark["detailed_timing"]["totals"]
+                total_fhe_time = (timing.get('avg_total_encryption_time', 0) + 
+                                timing.get('avg_total_send_time', 0) + 
+                                timing.get('avg_total_inference_time', 0) + 
+                                timing.get('avg_total_receive_time', 0) + 
+                                timing.get('avg_total_decryption_time', 0))
+                print(f"  FHE Pipeline time: {total_fhe_time:.4f}s")
+                print(f"  Non-FHE time: {timing.get('avg_total_torch_inference_time', 0):.4f}s")
         else:
             print(f"\n{benchmark['model']}: FAILED - {benchmark['error']}")
     print("=" * 60)

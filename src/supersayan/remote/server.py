@@ -176,9 +176,9 @@ class SupersayanServer:
 
     def handle_inference(
         self, model_id: str, layer_name: str, encrypted_input: Any
-    ) -> Any:
+    ) -> tuple[Any, float]:
         """
-        Handle inference.
+        Handle inference with timing.
 
         Args:
             model_id: The ID of the model
@@ -186,7 +186,7 @@ class SupersayanServer:
             encrypted_input: The encrypted input
 
         Returns:
-            Any: The output from the layer
+            Tuple[Any, float]: The output from the layer and inference time in seconds
         """
         model = self.model_store.get_model(model_id)
 
@@ -195,9 +195,14 @@ class SupersayanServer:
 
         layer = getattr(model, layer_name)
 
+        # Time the actual inference
+        import time
+        inference_start = time.time()
         encrypted_output = layer(encrypted_input)
+        inference_end = time.time()
+        inference_time = inference_end - inference_start
 
-        return encrypted_output
+        return encrypted_output, inference_time
     
     def handle_client(
         self, conn: socket.socket, addr: tuple[str, int]
@@ -234,13 +239,19 @@ class SupersayanServer:
                         structure = self.handle_get_model_structure(request["model_id"])
                         send_obj(conn, {"status": True, "structure": structure}, conn_id)
                     elif cmd == "inference":
-                        output = self.handle_inference(
+                        output, inference_time = self.handle_inference(
                             request["model_id"],
                             request["layer_name"],
                             request["encrypted_input"],
                         )
                         send_obj(
-                            conn, {"status": True, "encrypted_output": output}, conn_id
+                            conn, 
+                            {
+                                "status": True, 
+                                "encrypted_output": output,
+                                "server_inference_time": inference_time
+                            }, 
+                            conn_id
                         )
                     else:
                         send_obj(
