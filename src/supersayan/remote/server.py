@@ -9,9 +9,13 @@ from typing import Any, Dict, List
 import time
 
 import torch
+import numpy as np
 
 from supersayan.remote.socket_utils import recv_obj, send_obj
 from supersayan.logging_config import get_logger
+from supersayan.core.types import SupersayanTensor
+from supersayan.core import encryption, keygen
+from supersayan.nn.layers import Linear, Conv2d
 
 logger = get_logger(__name__)
 
@@ -143,6 +147,61 @@ class SupersayanServer:
 
     def __init__(self, storage_dir: str = "server_db/models") -> None:
         self.model_store = ModelStore(storage_dir)
+        self._julia_warmed_up = False
+
+    def _warmup_julia(self) -> None:
+        """
+        Warm up Julia by running dummy operations to pre-compile and initialize everything.
+        This avoids the 13-second delay on the first real inference.
+        """
+        if self._julia_warmed_up:
+            logger.info("Julia already warmed up, skipping")
+            return
+
+        logger.info("Starting Julia warmup to avoid cold start delays...")
+        warmup_start = time.time()
+
+        try:
+            # Generate a dummy key for encryption operations
+            logger.info("Generating dummy secret key...")
+            dummy_key = keygen.generate_secret_key()
+
+            # Create small dummy tensors for warmup
+            dummy_input_1d = SupersayanTensor(torch.randn(4).float())
+            dummy_input_2d = SupersayanTensor(torch.randn(1, 3, 8, 8).float())
+
+            # Warmup encryption/decryption
+            logger.info("Warming up encryption operations...")
+            encrypted_1d = encryption.encrypt_to_lwes(dummy_input_1d, dummy_key)
+            decrypted_1d = encryption.decrypt_from_lwes(encrypted_1d, dummy_key)
+
+            # Warmup Linear layer
+            logger.info("Warming up Linear layer operations...")
+            dummy_linear = Linear(4, 2)
+            linear_input = SupersayanTensor(torch.randn(1, 4).float())
+            encrypted_linear_input = encryption.encrypt_to_lwes(linear_input, dummy_key)
+            _ = dummy_linear(encrypted_linear_input)
+
+            # Warmup Conv2d layer
+            logger.info("Warming up Conv2d layer operations...")
+            dummy_conv = Conv2d(3, 16, kernel_size=3, padding=1)
+            conv_input = SupersayanTensor(torch.randn(1, 3, 8, 8).float())
+            encrypted_conv_input = encryption.encrypt_to_lwes(conv_input, dummy_key)
+            _ = dummy_conv(encrypted_conv_input)
+
+            # Force Julia garbage collection to clean up dummy objects
+            from supersayan.core.bindings import jl
+            jl.seval("GC.gc()")
+
+            warmup_end = time.time()
+            warmup_time = warmup_end - warmup_start
+            logger.info(f"Julia warmup completed successfully in {warmup_time:.2f} seconds")
+            
+            self._julia_warmed_up = True
+
+        except Exception as e:
+            logger.error(f"Julia warmup failed: {e}")
+            logger.warning("Continuing without warmup - first inference may be slow")
 
     def handle_upload_model_bytes(self, model_bytes: bytes) -> str:
         """
@@ -281,6 +340,9 @@ class SupersayanServer:
             host: The host to bind to
             port: The port to bind to
         """
+        # Warmup Julia before accepting connections
+        self._warmup_julia()
+
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((host, port))

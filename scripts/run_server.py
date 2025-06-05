@@ -17,12 +17,25 @@ def main() -> None:
         default="/tmp/supersayan/models",
         help="Directory where uploaded models are stored",
     )
+    parser.add_argument(
+        "--no-warmup",
+        action="store_true",
+        help="Skip Julia warmup on server startup (first inference will be slower)",
+    )
 
     args = parser.parse_args()
 
     configure_logging()
 
+    logger.info("Starting Supersayan server...")
+    logger.info(f"Models directory: {args.models_dir}")
+    logger.info(f"Julia warmup: {'disabled' if args.no_warmup else 'enabled'}")
+
     server = SupersayanServer(storage_dir=args.models_dir)
+
+    # Allow disabling warmup via command line
+    if args.no_warmup:
+        server._julia_warmed_up = True  # Skip warmup
 
     server.listen(args.host, args.port)
 
