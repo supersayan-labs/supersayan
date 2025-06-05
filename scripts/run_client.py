@@ -146,7 +146,7 @@ def run_detailed_timing_benchmarks(server: str = "127.0.0.1:8000") -> None:
     }
 
     benchmarks = [
-        ("ResNet18 (Detailed)", lambda: benchmark_resnet18(server, num_samples=1, enable_timing=True)),
+        ("ResNet18 (Detailed)", lambda: benchmark_resnet18(server, num_samples=10, enable_timing=True)),
     ]
 
     for name, benchmark_func in benchmarks:
