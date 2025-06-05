@@ -25,6 +25,7 @@ logger = get_logger(__name__)
 def benchmark_hybrid_house_price_regression(
     server: str = "127.0.0.1:8000",
     num_samples: int = 10,
+    enable_timing: bool = False,
 ) -> dict:
     """Benchmark house price regression model."""
     logger.info("Starting house price regression benchmark...")
@@ -62,9 +63,12 @@ def benchmark_hybrid_house_price_regression(
     torch_time = torch_end - torch_start
     torch_time_per_sample = torch_time / num_samples
 
-    # Benchmark client with detailed timing
+    # Benchmark client
     client = SupersayanClient(
-        server_url=server, torch_model=torch_model, fhe_modules=[nn.Linear]
+        server_url=server, 
+        torch_model=torch_model, 
+        fhe_modules=[nn.Linear],
+        enable_timing=enable_timing
     )
 
     client_start = time.time()
@@ -72,9 +76,6 @@ def benchmark_hybrid_house_price_regression(
     client_end = time.time()
     client_time = client_end - client_start
     client_time_per_sample = client_time / num_samples
-
-    # Get detailed timing data
-    timing_summary = client.get_timing_summary()
 
     result = {
         "model": "HousePriceRegressor",
@@ -86,21 +87,20 @@ def benchmark_hybrid_house_price_regression(
         "client_time": client_time,
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
-        "detailed_timing": timing_summary,
         "timestamp": datetime.now().isoformat(),
     }
+    
+    # Add detailed timing stats if enabled
+    if enable_timing:
+        result["detailed_timing"] = client.get_timing_stats()
 
     logger.info(
         f"House price regression - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
     )
-    
-    # Log detailed timing information
-    _log_detailed_timing(timing_summary)
-    
     return result
 
 
-def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> dict:
+def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1, enable_timing: bool = False) -> dict:
     """Benchmark ResNet18 model."""
     logger.info("Starting ResNet18 benchmark...")
 
@@ -121,9 +121,12 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
     torch_time = torch_end - torch_start
     torch_time_per_sample = torch_time / num_samples
 
-    # Benchmark client with detailed timing
+    # Benchmark client
     client = SupersayanClient(
-        server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
+        server_url=server, 
+        torch_model=torch_model, 
+        fhe_modules=[nn.Conv2d, nn.Linear],
+        enable_timing=enable_timing
     )
 
     client_start = time.time()
@@ -131,9 +134,6 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
     client_end = time.time()
     client_time = client_end - client_start
     client_time_per_sample = client_time / num_samples
-
-    # Get detailed timing data
-    timing_summary = client.get_timing_summary()
 
     result = {
         "model": "ResNet18",
@@ -145,21 +145,20 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1) -> 
         "client_time": client_time,
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
-        "detailed_timing": timing_summary,
         "timestamp": datetime.now().isoformat(),
     }
+    
+    # Add detailed timing stats if enabled
+    if enable_timing:
+        result["detailed_timing"] = client.get_timing_stats()
 
     logger.info(
         f"ResNet18 - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
     )
-    
-    # Log detailed timing information
-    _log_detailed_timing(timing_summary)
-    
     return result
 
 
-def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) -> dict:
+def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1, enable_timing: bool = False) -> dict:
     """Benchmark MNIST CNN model."""
     logger.info("Starting MNIST CNN benchmark...")
 
@@ -206,9 +205,12 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
     torch_time = torch_end - torch_start
     torch_time_per_sample = torch_time / num_samples
 
-    # Benchmark client with detailed timing
+    # Benchmark client
     client = SupersayanClient(
-        server_url=server, torch_model=torch_model, fhe_modules=[nn.Conv2d, nn.Linear]
+        server_url=server, 
+        torch_model=torch_model, 
+        fhe_modules=[nn.Conv2d, nn.Linear],
+        enable_timing=enable_timing
     )
 
     client_start = time.time()
@@ -216,9 +218,6 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
     client_end = time.time()
     client_time = client_end - client_start
     client_time_per_sample = client_time / num_samples
-
-    # Get detailed timing data
-    timing_summary = client.get_timing_summary()
 
     result = {
         "model": "MNIST_CNN",
@@ -230,80 +229,60 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1) ->
         "client_time": client_time,
         "client_time_per_sample": client_time_per_sample,
         "speedup": torch_time / client_time if client_time > 0 else 0,
-        "detailed_timing": timing_summary,
         "timestamp": datetime.now().isoformat(),
     }
+    
+    # Add detailed timing stats if enabled
+    if enable_timing:
+        result["detailed_timing"] = client.get_timing_stats()
 
     logger.info(
         f"MNIST CNN - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
     )
-    
-    # Log detailed timing information
-    _log_detailed_timing(timing_summary)
-    
     return result
-
-
-def _log_detailed_timing(timing_summary: dict) -> None:
-    """Log detailed timing information in a readable format."""
-    logger.info("=" * 60)
-    logger.info("DETAILED LAYER TIMING")
-    logger.info("=" * 60)
-    
-    for layer_name, layer_data in timing_summary["layers"].items():
-        logger.info(f"\nLayer: {layer_name} ({layer_data['layer_type']})")
-        logger.info(f"  Samples: {layer_data['num_samples']}")
-        
-        if layer_data['layer_type'] == 'FHE':
-            logger.info(f"  Encryption time: {layer_data['avg_encryption_time']:.6f}s")
-            logger.info(f"  Encrypted input size: {layer_data['avg_encrypted_input_size']:.0f} bytes")
-            logger.info(f"  Send time: {layer_data['avg_send_time']:.6f}s")
-            logger.info(f"  Server inference time: {layer_data['avg_server_inference_time']:.6f}s")
-            logger.info(f"  Receive time: {layer_data['avg_receive_time']:.6f}s")
-            logger.info(f"  Encrypted output size: {layer_data['avg_encrypted_output_size']:.0f} bytes")
-            logger.info(f"  Decryption time: {layer_data['avg_decryption_time']:.6f}s")
-            logger.info(f"  Total FHE time: {layer_data['avg_total_time']:.6f}s")
-        else:
-            logger.info(f"  Torch inference time: {layer_data['avg_torch_inference_time']:.6f}s")
-    
-    logger.info(f"\nSummary:")
-    logger.info(f"  Total FHE layers: {timing_summary['total_fhe_layers']}")
-    logger.info(f"  Total Torch layers: {timing_summary['total_torch_layers']}")
-    logger.info("=" * 60)
 
 
 def run_benchmarks(server: str = "127.0.0.1:8000") -> None:
     """Run all benchmarks and save results to JSON."""
     results = {
-        "benchmarks": [],
-        "system_info": {
-            "server_url": server,
-            "cuda_available": torch.cuda.is_available(),
-            "cuda_device": (
-                torch.cuda.get_device_name(0) if torch.cuda.is_available() else None
-            ),
-        },
+        "server": server,
+        "timestamp": datetime.now().isoformat(),
+        "benchmarks": []
     }
 
-    # Run benchmarks
-    try:
-        # ResNet18 with 1 sample
-        results["benchmarks"].append(benchmark_resnet18(server, num_samples=1))
-    except Exception as e:
-        logger.error(f"ResNet18 benchmark failed: {e}")
-        results["benchmarks"].append({"model": "ResNet18", "error": str(e)})
+    benchmarks = [
+        ("ResNet18", lambda: benchmark_resnet18(server, num_samples=2)),
+    ]
+
+    for name, benchmark_func in benchmarks:
+        try:
+            logger.info(f"Running {name} benchmark...")
+            result = benchmark_func()
+            results["benchmarks"].append(result)
+            logger.info(f"✓ {name} benchmark completed")
+        except Exception as exc:
+            logger.error(f"✗ {name} benchmark failed: {exc}")
+            results["benchmarks"].append({
+                "model": name,
+                "error": str(exc),
+                "timestamp": datetime.now().isoformat(),
+            })
 
     # Save results
-    output_file = Path("benchmark_results.json")
-    with open(output_file, "w") as f:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"benchmark_results_{timestamp}.json"
+    filepath = Path(filename)
+
+    with open(filepath, "w") as f:
         json.dump(results, f, indent=2)
 
-    logger.info(f"Benchmark results saved to {output_file}")
+    logger.info(f"Results saved to {filepath}")
 
     # Print summary
-    print("\n" + "=" * 60)
+    print("=" * 60)
     print("BENCHMARK SUMMARY")
     print("=" * 60)
+
     for benchmark in results["benchmarks"]:
         if "error" not in benchmark:
             print(f"\n{benchmark['model']}:")
@@ -315,39 +294,102 @@ def run_benchmarks(server: str = "127.0.0.1:8000") -> None:
                 f"  Client time: {benchmark['client_time']:.4f}s ({benchmark['client_time_per_sample']:.4f}s/sample)"
             )
             print(f"  Speedup: {benchmark['speedup']:.2f}x")
-            
-            # Print detailed timing summary
-            if "detailed_timing" in benchmark:
-                timing = benchmark["detailed_timing"]
-                print(f"  \nDetailed Layer Timing:")
-                print(f"    FHE layers: {timing.get('total_fhe_layers', 0)}")
-                print(f"    Torch layers: {timing.get('total_torch_layers', 0)}")
-                
-                # Print top FHE layers by total time
-                fhe_layers = [(name, data) for name, data in timing.get("layers", {}).items() 
-                             if data.get("layer_type") == "FHE"]
-                if fhe_layers:
-                    fhe_layers.sort(key=lambda x: x[1].get("avg_total_time", 0), reverse=True)
-                    print(f"    \nTop FHE layers by time:")
-                    for layer_name, layer_data in fhe_layers[:3]:  # Top 3
-                        print(f"      {layer_name}: {layer_data.get('avg_total_time', 0):.4f}s total")
-                        print(f"        - Encryption: {layer_data.get('avg_encryption_time', 0):.4f}s")
-                        print(f"        - Server inference: {layer_data.get('avg_server_inference_time', 0):.4f}s")
-                        print(f"        - Decryption: {layer_data.get('avg_decryption_time', 0):.4f}s")
-                        print(f"        - Data sizes: {layer_data.get('avg_encrypted_input_size', 0):.0f}B → {layer_data.get('avg_encrypted_output_size', 0):.0f}B")
-                
-                # Print top Torch layers by time
-                torch_layers = [(name, data) for name, data in timing.get("layers", {}).items() 
-                               if data.get("layer_type") == "Torch"]
-                if torch_layers:
-                    torch_layers.sort(key=lambda x: x[1].get("avg_torch_inference_time", 0), reverse=True)
-                    print(f"    \nTop Torch layers by time:")
-                    for layer_name, layer_data in torch_layers[:3]:  # Top 3
-                        print(f"      {layer_name}: {layer_data.get('avg_torch_inference_time', 0):.6f}s")
         else:
             print(f"\n{benchmark['model']}: FAILED - {benchmark['error']}")
     print("=" * 60)
 
 
+def run_detailed_timing_benchmarks(server: str = "127.0.0.1:8000") -> None:
+    """Run benchmarks with detailed timing enabled."""
+    from supersayan.core.timing import reset_timing_collector
+    
+    results = {
+        "server": server,
+        "timestamp": datetime.now().isoformat(),
+        "benchmarks": []
+    }
+
+    benchmarks = [
+        ("House Price Regression (Detailed)", lambda: benchmark_hybrid_house_price_regression(server, num_samples=3, enable_timing=True)),
+        ("MNIST CNN (Detailed)", lambda: benchmark_mnist_cnn(server, num_samples=2, enable_timing=True)),
+    ]
+
+    for name, benchmark_func in benchmarks:
+        try:
+            logger.info(f"Running {name} benchmark...")
+            reset_timing_collector()  # Reset timing before each benchmark
+            result = benchmark_func()
+            results["benchmarks"].append(result)
+            logger.info(f"✓ {name} benchmark completed")
+        except Exception as exc:
+            logger.error(f"✗ {name} benchmark failed: {exc}")
+            results["benchmarks"].append({
+                "model": name,
+                "error": str(exc),
+                "timestamp": datetime.now().isoformat(),
+            })
+
+    # Save results
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"detailed_timing_results_{timestamp}.json"
+    filepath = Path(filename)
+
+    with open(filepath, "w") as f:
+        json.dump(results, f, indent=2)
+
+    logger.info(f"Detailed timing results saved to {filepath}")
+
+    # Print detailed summary
+    print_detailed_timing_summary(results)
+
+
+def print_detailed_timing_summary(results: dict) -> None:
+    """Print detailed timing summary."""
+    print("\n" + "=" * 80)
+    print("DETAILED TIMING BENCHMARK SUMMARY")
+    print("=" * 80)
+    
+    for benchmark in results["benchmarks"]:
+        if "error" in benchmark:
+            print(f"\n{benchmark['model']}: FAILED - {benchmark['error']}")
+            continue
+            
+        print(f"\n{benchmark['model']}:")
+        print(f"  Samples: {benchmark['num_samples']}")
+        print(f"  Total time: {benchmark['client_time']:.4f}s ({benchmark['client_time_per_sample']:.4f}s/sample)")
+        
+        detailed_timing = benchmark.get("detailed_timing", {})
+        
+        if "fhe_layers" in detailed_timing:
+            print("\n  FHE LAYERS:")
+            for layer_name, stats in detailed_timing["fhe_layers"].items():
+                print(f"    {layer_name}:")
+                print(f"      Encryption: {stats['encryption_time']['mean']:.4f}s")
+                print(f"      Send: {stats['send_time']['mean']:.4f}s")
+                print(f"      Inference: {stats['inference_time']['mean']:.4f}s")
+                print(f"      Receive: {stats['receive_time']['mean']:.4f}s")
+                print(f"      Decryption: {stats['decryption_time']['mean']:.4f}s")
+                print(f"      Input size: {stats['encrypted_input_size_bytes']['mean']:.0f} bytes")
+                print(f"      Output size: {stats['encrypted_output_size_bytes']['mean']:.0f} bytes")
+        
+        if "non_fhe_layers" in detailed_timing:
+            print("\n  NON-FHE LAYERS:")
+            for layer_name, stats in detailed_timing["non_fhe_layers"].items():
+                print(f"    {layer_name}: {stats['torch_inference_time']['mean']:.4f}s")
+    
+    print("\n" + "=" * 80)
+
+
 if __name__ == "__main__":
-    run_benchmarks()
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Run Supersayan benchmarks")
+    parser.add_argument("--server", default="127.0.0.1:8000", help="Server address")
+    parser.add_argument("--detailed-timing", action="store_true", help="Run with detailed timing enabled")
+    
+    args = parser.parse_args()
+    
+    if args.detailed_timing:
+        run_detailed_timing_benchmarks(args.server)
+    else:
+        run_benchmarks(args.server)

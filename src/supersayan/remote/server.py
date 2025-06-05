@@ -6,6 +6,7 @@ import pickle
 import socket
 import uuid
 from typing import Any, Dict, List
+import time
 
 import torch
 
@@ -176,9 +177,9 @@ class SupersayanServer:
 
     def handle_inference(
         self, model_id: str, layer_name: str, encrypted_input: Any
-    ) -> tuple[Any, float]:
+    ) -> Any:
         """
-        Handle inference with timing.
+        Handle inference.
 
         Args:
             model_id: The ID of the model
@@ -186,7 +187,7 @@ class SupersayanServer:
             encrypted_input: The encrypted input
 
         Returns:
-            tuple: (output, inference_time)
+            Any: The output from the layer
         """
         model = self.model_store.get_model(model_id)
 
@@ -196,10 +197,10 @@ class SupersayanServer:
         layer = getattr(model, layer_name)
 
         # Time the inference
-        import time
         inference_start = time.time()
         encrypted_output = layer(encrypted_input)
-        inference_time = time.time() - inference_start
+        inference_end = time.time()
+        inference_time = inference_end - inference_start
 
         return encrypted_output, inference_time
     

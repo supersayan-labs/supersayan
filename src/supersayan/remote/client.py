@@ -3,7 +3,6 @@ from __future__ import annotations
 import pickle
 import socket
 import time
-import sys
 from typing import Any, Dict, List, Optional, Type, Union, cast
 
 import numpy as np
@@ -11,97 +10,19 @@ import torch
 import torch.nn as nn
 
 from supersayan.core.encryption import decrypt_from_lwes, encrypt_to_lwes
+from supersayan.core.timing import (
+    FHELayerTiming,
+    NonFHELayerTiming,
+    get_object_size_bytes,
+    get_timing_collector,
+    is_leaf_module,
+)
 from supersayan.core.types import SupersayanTensor
 from supersayan.logging_config import get_logger
 from supersayan.nn.convert import ModelType, SupersayanModel
 from supersayan.remote.socket_utils import REQUEST_TIMEOUT, recv_obj, send_obj
 
 logger = get_logger(__name__)
-
-
-class LayerTiming:
-    """Class to store detailed timing information for a layer."""
-    
-    def __init__(self, layer_name: str, layer_type: str):
-        self.layer_name = layer_name
-        self.layer_type = layer_type
-        
-        # FHE layer timings
-        self.encryption_time: float = 0.0
-        self.encrypted_input_size: int = 0
-        self.send_time: float = 0.0
-        self.server_inference_time: float = 0.0
-        self.receive_time: float = 0.0
-        self.encrypted_output_size: int = 0
-        self.decryption_time: float = 0.0
-        
-        # Non-FHE layer timings
-        self.torch_inference_time: float = 0.0
-        
-        # Sample timing information
-        self.sample_timings: List[Dict[str, Any]] = []
-    
-    def add_fhe_sample(self, encryption_time: float, encrypted_input_size: int,
-                      send_time: float, server_inference_time: float,
-                      receive_time: float, encrypted_output_size: int,
-                      decryption_time: float):
-        """Add timing data for one FHE sample."""
-        sample_data = {
-            "encryption_time": encryption_time,
-            "encrypted_input_size": encrypted_input_size,
-            "send_time": send_time,
-            "server_inference_time": server_inference_time,
-            "receive_time": receive_time,
-            "encrypted_output_size": encrypted_output_size,
-            "decryption_time": decryption_time,
-            "total_time": encryption_time + send_time + server_inference_time + receive_time + decryption_time
-        }
-        self.sample_timings.append(sample_data)
-    
-    def add_torch_sample(self, torch_inference_time: float):
-        """Add timing data for one torch sample."""
-        sample_data = {
-            "torch_inference_time": torch_inference_time
-        }
-        self.sample_timings.append(sample_data)
-    
-    def get_summary(self) -> Dict[str, Any]:
-        """Get summary statistics for this layer."""
-        if not self.sample_timings:
-            return {}
-            
-        if self.layer_type == "FHE":
-            # Average over all samples
-            avg_encryption = np.mean([s["encryption_time"] for s in self.sample_timings])
-            avg_input_size = np.mean([s["encrypted_input_size"] for s in self.sample_timings])
-            avg_send = np.mean([s["send_time"] for s in self.sample_timings])
-            avg_server = np.mean([s["server_inference_time"] for s in self.sample_timings])
-            avg_receive = np.mean([s["receive_time"] for s in self.sample_timings])
-            avg_output_size = np.mean([s["encrypted_output_size"] for s in self.sample_timings])
-            avg_decryption = np.mean([s["decryption_time"] for s in self.sample_timings])
-            avg_total = np.mean([s["total_time"] for s in self.sample_timings])
-            
-            return {
-                "layer_name": self.layer_name,
-                "layer_type": self.layer_type,
-                "num_samples": len(self.sample_timings),
-                "avg_encryption_time": avg_encryption,
-                "avg_encrypted_input_size": avg_input_size,
-                "avg_send_time": avg_send,
-                "avg_server_inference_time": avg_server,
-                "avg_receive_time": avg_receive,
-                "avg_encrypted_output_size": avg_output_size,
-                "avg_decryption_time": avg_decryption,
-                "avg_total_time": avg_total
-            }
-        else:  # Torch layer
-            avg_torch = np.mean([s["torch_inference_time"] for s in self.sample_timings])
-            return {
-                "layer_name": self.layer_name,
-                "layer_type": self.layer_type,
-                "num_samples": len(self.sample_timings),
-                "avg_torch_inference_time": avg_torch
-            }
 
 
 class SupersayanClient(SupersayanModel):
@@ -118,6 +39,7 @@ class SupersayanClient(SupersayanModel):
         torch_model: nn.Module,
         fhe_modules: Optional[Union[List[str], List[Type[nn.Module]]]] = None,
         model_id: Optional[str] = None,
+        enable_timing: bool = False,
     ) -> None:
         super().__init__(
             torch_model=torch_model,
@@ -126,6 +48,7 @@ class SupersayanClient(SupersayanModel):
         )
         self.model_id = model_id
         self.uploaded = model_id is not None
+        self.enable_timing = enable_timing
 
         # Note that the server_url should have the following format:
         # "host:port" (don't include http:// or https://)
@@ -139,29 +62,9 @@ class SupersayanClient(SupersayanModel):
         self.host = host
         self.port = port
 
-        # Timing data
-        self.layer_timings: Dict[str, LayerTiming] = {}
-        self.enable_timing = True
-
         # Populate remote layer names if a pre-existing model_id was given
         if self.uploaded:
             self._get_remote_layer_names()
-
-    def _is_leaf_layer(self, module: nn.Module) -> bool:
-        """Check if a module is a leaf layer (has no children)."""
-        return len(list(module.children())) == 0
-
-    def _get_leaf_layers(self) -> Dict[str, nn.Module]:
-        """Get all leaf layers in the model."""
-        leaf_layers = {}
-        for name, module in self.original_model.named_modules():
-            if self._is_leaf_layer(module):
-                leaf_layers[name] = module
-        return leaf_layers
-
-    def _get_object_size(self, obj: Any) -> int:
-        """Get the size of an object in bytes."""
-        return sys.getsizeof(pickle.dumps(obj))
 
     def _send_request(
         self, payload: Dict[str, Any], timeout: int = REQUEST_TIMEOUT
@@ -174,11 +77,9 @@ class SupersayanClient(SupersayanModel):
             timeout: The timeout for the connection
 
         Returns:
-            tuple: (response, send_time, receive_time)
+            tuple[Dict[str, Any], float, float]: The response, send time, and receive time
         """
         sock = None
-        send_time = 0.0
-        receive_time = 0.0
 
         try:
             sock = socket.create_connection((self.host, self.port), timeout=timeout)
@@ -186,7 +87,8 @@ class SupersayanClient(SupersayanModel):
             # Time the send operation
             send_start = time.time()
             conn_id = send_obj(sock, payload)
-            send_time = time.time() - send_start
+            send_end = time.time()
+            send_time = send_end - send_start
             
             logger.info(
                 f"[CONN:{conn_id}] Established connection to {self.host}:{self.port}"
@@ -195,7 +97,8 @@ class SupersayanClient(SupersayanModel):
             # Time the receive operation
             receive_start = time.time()
             response, _ = recv_obj(sock)
-            receive_time = time.time() - receive_start
+            receive_end = time.time()
+            receive_time = receive_end - receive_start
             
             logger.info(f"[CONN:{conn_id}] Completed request/response cycle")
         finally:
@@ -247,7 +150,7 @@ class SupersayanClient(SupersayanModel):
 
         self.remote_layer_names = structure.get("layer_order", [])
 
-    def _process_layer(self, layer_name: str, encrypted_input: Any) -> tuple[Any, float, float, float]:
+    def _process_layer(self, layer_name: str, encrypted_input: Any) -> tuple[Any, FHELayerTiming]:
         """
         Encrypt → remote FHE layer → decrypt with detailed timing.
 
@@ -256,8 +159,13 @@ class SupersayanClient(SupersayanModel):
             encrypted_input: The encrypted input to the layer
 
         Returns:
-            tuple: (output, send_time, server_inference_time, receive_time)
+            tuple[Any, FHELayerTiming]: The output from the layer and timing info
         """
+        timing = FHELayerTiming(layer_name=layer_name)
+        
+        if self.enable_timing:
+            timing.encrypted_input_size_bytes = get_object_size_bytes(encrypted_input)
+
         request = {
             "command": "inference",
             "model_id": self.model_id,
@@ -266,9 +174,14 @@ class SupersayanClient(SupersayanModel):
         }
 
         response, send_time, receive_time = self._send_request(request)
-        server_inference_time = response.get("inference_time", 0.0)
+        
+        if self.enable_timing:
+            timing.send_time = send_time
+            timing.receive_time = receive_time
+            timing.inference_time = response.get("inference_time", 0.0)
+            timing.encrypted_output_size_bytes = get_object_size_bytes(response["encrypted_output"])
 
-        return response["encrypted_output"], send_time, server_inference_time, receive_time
+        return response["encrypted_output"], timing
 
     def _forward_hybrid(self, x: torch.Tensor) -> SupersayanTensor:
         """
@@ -280,98 +193,108 @@ class SupersayanClient(SupersayanModel):
         Returns:
             SupersayanTensor: The output tensor
         """
-        # Clear previous timing data for new forward pass
-        if self.enable_timing:
-            self.layer_timings.clear()
+        collector = get_timing_collector() if self.enable_timing else None
         
-        # Get all leaf layers
-        leaf_layers = self._get_leaf_layers()
-        
-        # Register hooks to intercept layers
+        # Register hooks to intercept FHE layers and time non-FHE layers
         hooks = []
 
-        def make_fhe_hook(layer_name, normalized_name):
+        def make_fhe_hook(layer_name):
             def hook(module, input, output):
-                if not self.enable_timing:
-                    # Original behavior without timing
-                    input_st = SupersayanTensor(input[0])
-                    enc_in = encrypt_to_lwes(input_st, self.secret_key)
-                    enc_out, _, _, _ = self._process_layer(normalized_name, enc_in)
-                    dec = decrypt_from_lwes(enc_out, self.secret_key)
-                    return dec
-                
-                # Initialize timing data for this layer
-                if normalized_name not in self.layer_timings:
-                    self.layer_timings[normalized_name] = LayerTiming(layer_name, "FHE")
-                
                 input_st = SupersayanTensor(input[0])
 
+                timing = FHELayerTiming(layer_name=layer_name)
+                
                 # Time encryption
-                enc_start = time.time()
+                if self.enable_timing:
+                    enc_start = time.time()
+                    
                 enc_in = encrypt_to_lwes(input_st, self.secret_key)
-                encryption_time = time.time() - enc_start
                 
-                # Get encrypted input size
-                encrypted_input_size = self._get_object_size(enc_in)
-
-                # Process layer (includes send, inference, receive timing)
-                enc_out, send_time, server_inference_time, receive_time = self._process_layer(normalized_name, enc_in)
+                if self.enable_timing:
+                    enc_end = time.time()
+                    timing.encryption_time = enc_end - enc_start
                 
-                # Get encrypted output size
-                encrypted_output_size = self._get_object_size(enc_out)
+                # Process layer remotely (includes send/receive timing)
+                enc_out, layer_timing = self._process_layer(layer_name, enc_in)
+                
+                # Merge timing info
+                if self.enable_timing:
+                    timing.encrypted_input_size_bytes = layer_timing.encrypted_input_size_bytes
+                    timing.send_time = layer_timing.send_time
+                    timing.receive_time = layer_timing.receive_time
+                    timing.inference_time = layer_timing.inference_time
+                    timing.encrypted_output_size_bytes = layer_timing.encrypted_output_size_bytes
                 
                 # Time decryption
-                dec_start = time.time()
+                if self.enable_timing:
+                    dec_start = time.time()
+                    
                 dec = decrypt_from_lwes(enc_out, self.secret_key)
-                decryption_time = time.time() - dec_start
-
-                # Store timing data
-                self.layer_timings[normalized_name].add_fhe_sample(
-                    encryption_time, encrypted_input_size, send_time,
-                    server_inference_time, receive_time, encrypted_output_size,
-                    decryption_time
-                )
+                
+                if self.enable_timing:
+                    dec_end = time.time()
+                    timing.decryption_time = dec_end - dec_start
+                    
+                    # Add timing to collector
+                    if collector:
+                        collector.add_fhe_layer_timing(timing)
 
                 return dec
 
             return hook
 
-        def make_torch_hook(layer_name):
+        def make_non_fhe_hook(layer_name):
             def hook(module, input, output):
-                if not self.enable_timing:
-                    return output
-                
-                # Initialize timing data for this layer
-                if layer_name not in self.layer_timings:
-                    self.layer_timings[layer_name] = LayerTiming(layer_name, "Torch")
-                
-                # Time torch inference
-                torch_start = time.time()
-                # The actual computation already happened, so we just measure the overhead
-                # For proper timing, we need to re-run the computation
-                with torch.no_grad():
-                    torch_output = module(*input)
-                torch_inference_time = time.time() - torch_start
-                
-                # Store timing data
-                self.layer_timings[layer_name].add_torch_sample(torch_inference_time)
-                
-                return torch_output
+                if self.enable_timing and collector:
+                    # This hook runs after the layer execution
+                    # We need to time the layer during execution, but PyTorch hooks
+                    # run after the forward pass is complete
+                    # For now, we'll use a pre-hook to get accurate timing
+                    pass
+                return output
 
             return hook
 
-        # Register hooks for leaf layers only
-        for name, module in leaf_layers.items():
+        def make_non_fhe_pre_hook(layer_name):
+            def pre_hook(module, input):
+                if self.enable_timing and collector:
+                    # Store start time in the module
+                    module._timing_start = time.time()
+                return input
+
+            return pre_hook
+
+        def make_non_fhe_post_hook(layer_name):
+            def post_hook(module, input, output):
+                if self.enable_timing and collector and hasattr(module, '_timing_start'):
+                    end_time = time.time()
+                    torch_inference_time = end_time - module._timing_start
+                    delattr(module, '_timing_start')
+                    
+                    timing = NonFHELayerTiming(
+                        layer_name=layer_name,
+                        torch_inference_time=torch_inference_time
+                    )
+                    collector.add_non_fhe_layer_timing(timing)
+                return output
+
+            return post_hook
+
+        # Register hooks for all modules (only leaf modules)
+        for name, module in self.original_model.named_modules():
+            if not is_leaf_module(module):
+                continue
+                
             normalized_name = name.replace(".", "_")
             if normalized_name in self.fhe_module_names:
-                # This is an FHE layer
-                hook = module.register_forward_hook(make_fhe_hook(name, normalized_name))
+                hook = module.register_forward_hook(make_fhe_hook(normalized_name))
                 hooks.append(hook)
             else:
-                # This is a regular PyTorch layer
+                # For non-FHE layers, register both pre and post hooks for accurate timing
                 if self.enable_timing:
-                    hook = module.register_forward_hook(make_torch_hook(name))
-                    hooks.append(hook)
+                    pre_hook = module.register_forward_pre_hook(make_non_fhe_pre_hook(normalized_name))
+                    post_hook = module.register_forward_hook(make_non_fhe_post_hook(normalized_name))
+                    hooks.extend([pre_hook, post_hook])
 
         # Run forward pass
         with torch.no_grad():
@@ -385,7 +308,7 @@ class SupersayanClient(SupersayanModel):
 
     def forward(self, x: torch.Tensor) -> SupersayanTensor:
         """
-        Forward pass.
+        Forward pass with optional timing collection.
 
         Args:
             x: The input tensor
@@ -395,36 +318,44 @@ class SupersayanClient(SupersayanModel):
         """
         self._upload_model_if_needed()
 
-        return self._forward_hybrid(x)
+        # Handle batch inputs by processing each sample individually for timing
+        if self.enable_timing and x.size(0) > 1:
+            collector = get_timing_collector()
+            outputs = []
+            
+            for i in range(x.size(0)):
+                collector.start_sample()
+                sample_input = x[i:i+1]  # Keep batch dimension
+                sample_output = self._forward_hybrid(sample_input)
+                outputs.append(sample_output)
+                collector.end_sample()
+            
+            return SupersayanTensor(torch.cat(outputs, dim=0))
+        else:
+            if self.enable_timing:
+                collector = get_timing_collector()
+                collector.start_sample()
+                result = self._forward_hybrid(x)
+                collector.end_sample()
+                return result
+            else:
+                return self._forward_hybrid(x)
 
-    def get_timing_summary(self) -> Dict[str, Any]:
+    def get_timing_stats(self) -> Dict[str, Any]:
         """
-        Get timing summary for all layers.
+        Get timing statistics from the collector.
         
         Returns:
-            Dict containing timing summaries for all layers
+            Dict[str, Any]: Timing statistics
         """
-        summary = {
-            "layers": {},
-            "total_fhe_layers": 0,
-            "total_torch_layers": 0
-        }
+        if not self.enable_timing:
+            return {"error": "Timing not enabled. Create client with enable_timing=True"}
         
-        for layer_name, timing in self.layer_timings.items():
-            layer_summary = timing.get_summary()
-            if layer_summary:
-                summary["layers"][layer_name] = layer_summary
-                if timing.layer_type == "FHE":
-                    summary["total_fhe_layers"] += 1
-                else:
-                    summary["total_torch_layers"] += 1
-        
-        return summary
-
-    def reset_timing(self) -> None:
-        """Reset all timing data."""
-        self.layer_timings.clear()
-
-    def set_timing_enabled(self, enabled: bool) -> None:
-        """Enable or disable timing collection."""
-        self.enable_timing = enabled
+        collector = get_timing_collector()
+        return collector.get_summary_stats()
+    
+    def clear_timing_stats(self) -> None:
+        """Clear timing statistics."""
+        if self.enable_timing:
+            collector = get_timing_collector()
+            collector.clear()

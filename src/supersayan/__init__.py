@@ -5,7 +5,7 @@ try:
 except Exception:
     pass
 
-from .core import bindings, encryption, keygen
+from .core import bindings, encryption, keygen, timing
 from .logging_config import configure_logging, get_logger, set_log_level
 from .nn import layers
 from .nn.convert import ModelType, SupersayanModel
