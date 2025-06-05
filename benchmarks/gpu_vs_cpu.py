@@ -35,6 +35,7 @@ def fhe_secret_key():
     return generate_secret_key()
 
 
+# Fixtures for encryption/decryption tests (support multi-dimensional arrays)
 @pytest.fixture(params=[
     (10,),           # 1D small
     (100,),          # 1D medium
@@ -45,8 +46,20 @@ def fhe_secret_key():
     (2, 3, 4),       # 3D small
     (8, 16, 32),     # 3D medium
 ])
-def shape_fixture(request):
-    """Parameterized fixture for different tensor shapes."""
+def encryption_shape_fixture(request):
+    """Parameterized fixture for encryption/decryption tensor shapes."""
+    return request.param
+
+
+# Fixtures for homomorphic operations (1D arrays only)
+@pytest.fixture(params=[
+    (20,),           # Small vector
+    (100,),          # Medium vector  
+    (500,),          # Large vector
+    (1000,),         # Very large vector
+])
+def operation_shape_fixture(request):
+    """Parameterized fixture for homomorphic operation shapes (1D only)."""
     return request.param
 
 
@@ -89,9 +102,9 @@ def create_gpu_tensor(shape):
 # ENCRYPTION/DECRYPTION BENCHMARKS
 # ============================================================================
 
-def test_encryption_cpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_encryption_cpu_benchmark(benchmark, fhe_secret_key, encryption_shape_fixture):
     """Benchmark CPU encryption performance."""
-    tensor = create_cpu_tensor(shape_fixture)
+    tensor = create_cpu_tensor(encryption_shape_fixture)
     
     def encrypt_decrypt():
         encrypted = encrypt_to_lwes(tensor, fhe_secret_key)
@@ -103,9 +116,9 @@ def test_encryption_cpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
 
 
 @skip_cuda
-def test_encryption_gpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_encryption_gpu_benchmark(benchmark, fhe_secret_key, encryption_shape_fixture):
     """Benchmark GPU encryption performance."""
-    tensor = create_gpu_tensor(shape_fixture)
+    tensor = create_gpu_tensor(encryption_shape_fixture)
     
     def encrypt_decrypt():
         encrypted = encrypt_to_lwes(tensor, fhe_secret_key)
@@ -117,13 +130,13 @@ def test_encryption_gpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
 
 
 # ============================================================================
-# ADDITION OPERATION BENCHMARKS
+# ADDITION OPERATION BENCHMARKS (1D arrays only)
 # ============================================================================
 
-def test_add_ciphertext_ciphertext_cpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_add_ciphertext_ciphertext_cpu_benchmark(benchmark, fhe_secret_key, operation_shape_fixture):
     """Benchmark CPU homomorphic addition of two ciphertexts."""
-    lhs = create_cpu_tensor(shape_fixture)
-    rhs = create_cpu_tensor(shape_fixture)
+    lhs = create_cpu_tensor(operation_shape_fixture)
+    rhs = create_cpu_tensor(operation_shape_fixture)
     
     def add_operation():
         lhs_ct = encrypt_to_lwes(lhs, fhe_secret_key)
@@ -136,10 +149,10 @@ def test_add_ciphertext_ciphertext_cpu_benchmark(benchmark, fhe_secret_key, shap
 
 
 @skip_cuda
-def test_add_ciphertext_ciphertext_gpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_add_ciphertext_ciphertext_gpu_benchmark(benchmark, fhe_secret_key, operation_shape_fixture):
     """Benchmark GPU homomorphic addition of two ciphertexts."""
-    lhs = create_gpu_tensor(shape_fixture)
-    rhs = create_gpu_tensor(shape_fixture)
+    lhs = create_gpu_tensor(operation_shape_fixture)
+    rhs = create_gpu_tensor(operation_shape_fixture)
     
     def add_operation():
         lhs_ct = encrypt_to_lwes(lhs, fhe_secret_key)
@@ -151,9 +164,9 @@ def test_add_ciphertext_ciphertext_gpu_benchmark(benchmark, fhe_secret_key, shap
     assert result.shape == lhs.shape
 
 
-def test_add_ciphertext_scalar_cpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_add_ciphertext_scalar_cpu_benchmark(benchmark, fhe_secret_key, operation_shape_fixture):
     """Benchmark CPU homomorphic addition of ciphertext and scalar."""
-    tensor = create_cpu_tensor(shape_fixture)
+    tensor = create_cpu_tensor(operation_shape_fixture)
     scalar = np.float32(0.25)
     
     def add_scalar_operation():
@@ -166,9 +179,9 @@ def test_add_ciphertext_scalar_cpu_benchmark(benchmark, fhe_secret_key, shape_fi
 
 
 @skip_cuda
-def test_add_ciphertext_scalar_gpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_add_ciphertext_scalar_gpu_benchmark(benchmark, fhe_secret_key, operation_shape_fixture):
     """Benchmark GPU homomorphic addition of ciphertext and scalar."""
-    tensor = create_gpu_tensor(shape_fixture)
+    tensor = create_gpu_tensor(operation_shape_fixture)
     scalar = np.float32(0.25)
     
     def add_scalar_operation():
@@ -181,12 +194,12 @@ def test_add_ciphertext_scalar_gpu_benchmark(benchmark, fhe_secret_key, shape_fi
 
 
 # ============================================================================
-# MULTIPLICATION OPERATION BENCHMARKS
+# MULTIPLICATION OPERATION BENCHMARKS (1D arrays only)
 # ============================================================================
 
-def test_mult_ciphertext_scalar_cpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_mult_ciphertext_scalar_cpu_benchmark(benchmark, fhe_secret_key, operation_shape_fixture):
     """Benchmark CPU homomorphic multiplication of ciphertext and scalar."""
-    tensor = create_cpu_tensor(shape_fixture)
+    tensor = create_cpu_tensor(operation_shape_fixture)
     scalar = np.float32(0.3)
     
     def mult_scalar_operation():
@@ -199,9 +212,9 @@ def test_mult_ciphertext_scalar_cpu_benchmark(benchmark, fhe_secret_key, shape_f
 
 
 @skip_cuda
-def test_mult_ciphertext_scalar_gpu_benchmark(benchmark, fhe_secret_key, shape_fixture):
+def test_mult_ciphertext_scalar_gpu_benchmark(benchmark, fhe_secret_key, operation_shape_fixture):
     """Benchmark GPU homomorphic multiplication of ciphertext and scalar."""
-    tensor = create_gpu_tensor(shape_fixture)
+    tensor = create_gpu_tensor(operation_shape_fixture)
     scalar = np.float32(0.3)
     
     def mult_scalar_operation():
@@ -230,15 +243,16 @@ def test_dot_product_cpu_benchmark(benchmark, fhe_secret_key):
         # Create zero ciphertext
         zero_tensor = SupersayanTensor(np.asarray([0.0], dtype=np.float32))
         zero_ct_array = encrypt_to_lwes(zero_tensor, fhe_secret_key)
-        zero_ct = zero_ct_array[0, :]
+        zero_ct = zero_ct_array.to_numpy()[0, :]  # Extract first row safely
         
         res_ct = SupersayanTFHE.Operations.dot_product_lwe(
-            enc_ct.to_julia(), plain_weights, zero_ct.to_julia()
+            enc_ct.to_julia(), plain_weights, zero_ct
         )
         
         res_ct_tensor = SupersayanTensor._from_julia(res_ct)
         res_ct_tensor = res_ct_tensor.reshape(1, -1)
-        return decrypt_from_lwes(res_ct_tensor, fhe_secret_key)[0]
+        decrypted = decrypt_from_lwes(res_ct_tensor, fhe_secret_key)
+        return decrypted.to_numpy()[0]
     
     result = benchmark(dot_product_operation)
     assert isinstance(result, (float, np.floating))
@@ -261,15 +275,16 @@ def test_dot_product_gpu_benchmark(benchmark, fhe_secret_key):
             cp.asarray([0.0], dtype=np.float32), device=torch.device("cuda")
         )
         zero_ct_array = encrypt_to_lwes(zero_tensor, fhe_secret_key)
-        zero_ct = zero_ct_array[0, :]
+        zero_ct = zero_ct_array.to_numpy()[0, :]  # Convert to CPU for safe indexing
         
         res_ct = SupersayanTFHE.Operations.dot_product_lwe(
-            enc_ct.to_julia(), plain_weights, zero_ct.to_julia()
+            enc_ct.to_julia(), plain_weights, zero_ct
         )
         
         res_ct_tensor = SupersayanTensor._from_julia(res_ct)
         res_ct_tensor = res_ct_tensor.reshape(1, -1)
-        return decrypt_from_lwes(res_ct_tensor, fhe_secret_key)[0]
+        decrypted = decrypt_from_lwes(res_ct_tensor, fhe_secret_key)
+        return decrypted.to_numpy()[0]
     
     result = benchmark(dot_product_operation)
     assert isinstance(result, (float, np.floating))
@@ -300,10 +315,10 @@ def test_batch_dot_product_cpu_benchmark(benchmark, fhe_secret_key, batch_shape_
         # Create zero ciphertext
         zero_tensor = SupersayanTensor(np.asarray([0.0], dtype=np.float32))
         zero_ct_array = encrypt_to_lwes(zero_tensor, fhe_secret_key)
-        zero_ct = zero_ct_array[0, :]
+        zero_ct = zero_ct_array.to_numpy()[0, :]  # Extract first row safely
         
         res_ct_batch = SupersayanTFHE.Operations.batch_dot_product_lwe(
-            enc_ct_batch_stacked.to_julia(), plain_weights_batch, zero_ct.to_julia()
+            enc_ct_batch_stacked.to_julia(), plain_weights_batch, zero_ct
         )
         
         return decrypt_from_lwes(
@@ -343,10 +358,10 @@ def test_batch_dot_product_gpu_benchmark(benchmark, fhe_secret_key, batch_shape_
             cp.asarray([0.0], dtype=np.float32), device=torch.device("cuda")
         )
         zero_ct_array = encrypt_to_lwes(zero_tensor, fhe_secret_key)
-        zero_ct = zero_ct_array[0, :]
+        zero_ct = zero_ct_array.to_numpy()[0, :]  # Convert to CPU for safe indexing
         
         res_ct_batch = SupersayanTFHE.Operations.batch_dot_product_lwe(
-            enc_ct_batch_stacked.to_julia(), plain_weights_batch, zero_ct.to_julia()
+            enc_ct_batch_stacked.to_julia(), plain_weights_batch, zero_ct
         )
         
         return decrypt_from_lwes(
@@ -403,7 +418,7 @@ def test_combined_operations_cpu_benchmark(benchmark, fhe_secret_key):
     vec_size = 64
     
     def combined_operations():
-        # Create input tensors
+        # Create input tensors (1D only for homomorphic operations)
         tensor1 = SupersayanTensor(
             np.random.uniform(0.0, 0.3, size=vec_size).astype(np.float32)
         )
@@ -437,7 +452,7 @@ def test_combined_operations_gpu_benchmark(benchmark, fhe_secret_key):
     vec_size = 64
     
     def combined_operations():
-        # Create input tensors
+        # Create input tensors (1D only for homomorphic operations)
         tensor1 = SupersayanTensor(
             cp.random.uniform(0.0, 0.3, size=vec_size).astype(np.float32),
             device=torch.device("cuda")
