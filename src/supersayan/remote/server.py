@@ -189,10 +189,6 @@ class SupersayanServer:
             encrypted_conv_input = encryption.encrypt_to_lwes(conv_input, dummy_key)
             _ = dummy_conv(encrypted_conv_input)
 
-            # Force Julia garbage collection to clean up dummy objects
-            from supersayan.core.bindings import jl
-            jl.seval("GC.gc()")
-
             warmup_end = time.time()
             warmup_time = warmup_end - warmup_start
             logger.info(f"Julia warmup completed successfully in {warmup_time:.2f} seconds")
