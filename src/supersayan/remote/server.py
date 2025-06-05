@@ -186,7 +186,7 @@ class SupersayanServer:
             encrypted_input: The encrypted input
 
         Returns:
-            Tuple[Any, float]: The output from the layer and inference time in seconds
+            tuple: (output, inference_time)
         """
         model = self.model_store.get_model(model_id)
 
@@ -195,12 +195,11 @@ class SupersayanServer:
 
         layer = getattr(model, layer_name)
 
-        # Time the actual inference
+        # Time the inference
         import time
         inference_start = time.time()
         encrypted_output = layer(encrypted_input)
-        inference_end = time.time()
-        inference_time = inference_end - inference_start
+        inference_time = time.time() - inference_start
 
         return encrypted_output, inference_time
     
@@ -245,13 +244,7 @@ class SupersayanServer:
                             request["encrypted_input"],
                         )
                         send_obj(
-                            conn, 
-                            {
-                                "status": True, 
-                                "encrypted_output": output,
-                                "server_inference_time": inference_time
-                            }, 
-                            conn_id
+                            conn, {"status": True, "encrypted_output": output, "inference_time": inference_time}, conn_id
                         )
                     else:
                         send_obj(
