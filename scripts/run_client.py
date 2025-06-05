@@ -93,6 +93,7 @@ def benchmark_hybrid_house_price_regression(
     # Add detailed timing stats if enabled
     if enable_timing:
         result["detailed_timing"] = client.get_timing_stats()
+        result["raw_timing_data"] = client.get_raw_timing_data()
 
     logger.info(
         f"House price regression - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
@@ -151,6 +152,7 @@ def benchmark_resnet18(server: str = "127.0.0.1:8000", num_samples: int = 1, ena
     # Add detailed timing stats if enabled
     if enable_timing:
         result["detailed_timing"] = client.get_timing_stats()
+        result["raw_timing_data"] = client.get_raw_timing_data()
 
     logger.info(
         f"ResNet18 - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
@@ -235,6 +237,7 @@ def benchmark_mnist_cnn(server: str = "127.0.0.1:8000", num_samples: int = 1, en
     # Add detailed timing stats if enabled
     if enable_timing:
         result["detailed_timing"] = client.get_timing_stats()
+        result["raw_timing_data"] = client.get_raw_timing_data()
 
     logger.info(
         f"MNIST CNN - PyTorch time: {torch_time:.4f}s ({torch_time_per_sample:.4f}s/sample), Client time: {client_time:.4f}s ({client_time_per_sample:.4f}s/sample)"
@@ -310,7 +313,9 @@ def run_detailed_timing_benchmarks(server: str = "127.0.0.1:8000") -> None:
     }
 
     benchmarks = [
+        ("House Price Regression (Detailed)", lambda: benchmark_hybrid_house_price_regression(server, num_samples=3, enable_timing=True)),
         ("ResNet18 (Detailed)", lambda: benchmark_resnet18(server, num_samples=2, enable_timing=True)),
+        ("MNIST CNN (Detailed)", lambda: benchmark_mnist_cnn(server, num_samples=2, enable_timing=True)),
     ]
 
     for name, benchmark_func in benchmarks:
@@ -360,7 +365,7 @@ def print_detailed_timing_summary(results: dict) -> None:
         detailed_timing = benchmark.get("detailed_timing", {})
         
         if "fhe_layers" in detailed_timing:
-            print("\n  FHE LAYERS:")
+            print("\n  FHE LAYERS (AGGREGATED):")
             for layer_name, stats in detailed_timing["fhe_layers"].items():
                 print(f"    {layer_name}:")
                 print(f"      Encryption: {stats['encryption_time']['mean']:.4f}s")
@@ -372,9 +377,35 @@ def print_detailed_timing_summary(results: dict) -> None:
                 print(f"      Output size: {stats['encrypted_output_size_bytes']['mean']:.0f} bytes")
         
         if "non_fhe_layers" in detailed_timing:
-            print("\n  NON-FHE LAYERS:")
+            print("\n  NON-FHE LAYERS (AGGREGATED):")
             for layer_name, stats in detailed_timing["non_fhe_layers"].items():
                 print(f"    {layer_name}: {stats['torch_inference_time']['mean']:.4f}s")
+        
+        # Print raw per-sample data
+        raw_timing_data = benchmark.get("raw_timing_data", [])
+        if raw_timing_data:
+            print("\n  PER-SAMPLE BREAKDOWN:")
+            for sample_data in raw_timing_data:
+                sample_id = sample_data["sample_id"]
+                print(f"\n    Sample {sample_id}:")
+                
+                if sample_data["fhe_layers"]:
+                    print(f"      FHE Layers:")
+                    for fhe_layer in sample_data["fhe_layers"]:
+                        print(f"        {fhe_layer['layer_name']}:")
+                        print(f"          Encryption: {fhe_layer['encryption_time']:.4f}s")
+                        print(f"          Send: {fhe_layer['send_time']:.4f}s") 
+                        print(f"          Inference: {fhe_layer['inference_time']:.4f}s")
+                        print(f"          Receive: {fhe_layer['receive_time']:.4f}s")
+                        print(f"          Decryption: {fhe_layer['decryption_time']:.4f}s")
+                        print(f"          Total FHE: {fhe_layer['total_fhe_time']:.4f}s")
+                        print(f"          Input size: {fhe_layer['encrypted_input_size_bytes']} bytes")
+                        print(f"          Output size: {fhe_layer['encrypted_output_size_bytes']} bytes")
+                
+                if sample_data["non_fhe_layers"]:
+                    print(f"      Non-FHE Layers:")
+                    for non_fhe_layer in sample_data["non_fhe_layers"]:
+                        print(f"        {non_fhe_layer['layer_name']}: {non_fhe_layer['torch_inference_time']:.4f}s")
     
     print("\n" + "=" * 80)
 

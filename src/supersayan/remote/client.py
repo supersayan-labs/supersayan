@@ -81,24 +81,23 @@ class SupersayanClient(SupersayanModel):
         """
         sock = None
 
+        # Add client timestamp right before sending if timing is enabled
+        if self.enable_timing:
+            payload["client_send_timestamp"] = time.time()
+
         try:
             sock = socket.create_connection((self.host, self.port), timeout=timeout)
             
-            # Time the send operation
-            send_start = time.time()
+            # Send the request
             conn_id = send_obj(sock, payload)
-            send_end = time.time()
-            send_time = send_end - send_start
             
             logger.info(
                 f"[CONN:{conn_id}] Established connection to {self.host}:{self.port}"
             )
             
-            # Time the receive operation
-            receive_start = time.time()
+            # Receive the response
+            client_receive_timestamp = time.time()
             response, _ = recv_obj(sock)
-            receive_end = time.time()
-            receive_time = receive_end - receive_start
             
             logger.info(f"[CONN:{conn_id}] Completed request/response cycle")
         finally:
@@ -109,6 +108,19 @@ class SupersayanClient(SupersayanModel):
             raise ValueError("Invalid response from server – expected dict")
         if not response.get("status", False):
             raise ValueError(response.get("error", "Unknown server error"))
+
+        # Calculate accurate send and receive times from timestamps
+        send_time = 0.0
+        receive_time = 0.0
+        
+        if self.enable_timing:
+            # Send time = server received timestamp - client sent timestamp
+            if "server_receive_timestamp" in response:
+                send_time = response["server_receive_timestamp"] - payload["client_send_timestamp"]
+            
+            # Receive time = client received timestamp - server sent timestamp  
+            if "server_send_timestamp" in response:
+                receive_time = client_receive_timestamp - response["server_send_timestamp"]
 
         return cast(Dict[str, Any], response), send_time, receive_time
 
@@ -178,7 +190,7 @@ class SupersayanClient(SupersayanModel):
         if self.enable_timing:
             timing.send_time = send_time
             timing.receive_time = receive_time
-            timing.inference_time = response.get("inference_time", 0.0)
+            timing.inference_time = response["inference_time"]
             timing.encrypted_output_size_bytes = get_object_size_bytes(response["encrypted_output"])
 
         return response["encrypted_output"], timing
@@ -353,6 +365,57 @@ class SupersayanClient(SupersayanModel):
         
         collector = get_timing_collector()
         return collector.get_summary_stats()
+    
+    def get_raw_timing_data(self) -> List[Dict[str, Any]]:
+        """
+        Get raw per-sample timing data.
+        
+        Returns:
+            List[Dict[str, Any]]: Raw timing data for each sample
+        """
+        if not self.enable_timing:
+            return [{"error": "Timing not enabled. Create client with enable_timing=True"}]
+        
+        collector = get_timing_collector()
+        raw_data = []
+        
+        for sample in collector.samples:
+            sample_data = {
+                "sample_id": sample.sample_id,
+                "fhe_layers": [],
+                "non_fhe_layers": []
+            }
+            
+            # Add FHE layer timings
+            for fhe_timing in sample.fhe_layers:
+                sample_data["fhe_layers"].append({
+                    "layer_name": fhe_timing.layer_name,
+                    "encryption_time": fhe_timing.encryption_time,
+                    "encrypted_input_size_bytes": fhe_timing.encrypted_input_size_bytes,
+                    "send_time": fhe_timing.send_time,
+                    "inference_time": fhe_timing.inference_time,
+                    "receive_time": fhe_timing.receive_time,
+                    "encrypted_output_size_bytes": fhe_timing.encrypted_output_size_bytes,
+                    "decryption_time": fhe_timing.decryption_time,
+                    "total_fhe_time": (
+                        fhe_timing.encryption_time + 
+                        fhe_timing.send_time + 
+                        fhe_timing.inference_time + 
+                        fhe_timing.receive_time + 
+                        fhe_timing.decryption_time
+                    )
+                })
+            
+            # Add non-FHE layer timings
+            for non_fhe_timing in sample.non_fhe_layers:
+                sample_data["non_fhe_layers"].append({
+                    "layer_name": non_fhe_timing.layer_name,
+                    "torch_inference_time": non_fhe_timing.torch_inference_time
+                })
+            
+            raw_data.append(sample_data)
+        
+        return raw_data
     
     def clear_timing_stats(self) -> None:
         """Clear timing statistics."""

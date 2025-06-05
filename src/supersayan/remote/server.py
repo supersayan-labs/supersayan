@@ -221,11 +221,16 @@ class SupersayanServer:
             while True:
                 try:
                     request, conn_id = recv_obj(conn)
+                    server_receive_timestamp = time.time()  # Capture when we received the request
                 except ConnectionError:
                     break
 
                 if not isinstance(request, dict) or "command" not in request:
-                    send_obj(conn, {"status": False, "error": "invalid request"}, conn_id)
+                    response = {"status": False, "error": "invalid request"}
+                    if "client_send_timestamp" in request:
+                        response["server_receive_timestamp"] = server_receive_timestamp
+                        response["server_send_timestamp"] = time.time()
+                    send_obj(conn, response, conn_id)
                     continue
 
                 cmd = request["command"]
@@ -234,28 +239,36 @@ class SupersayanServer:
                 try:
                     if cmd == "upload_model":
                         model_id = self.handle_upload_model_bytes(request["model_data"])
-                        send_obj(conn, {"status": True, "model_id": model_id}, conn_id)
+                        response = {"status": True, "model_id": model_id}
                     elif cmd == "get_model_structure":
                         structure = self.handle_get_model_structure(request["model_id"])
-                        send_obj(conn, {"status": True, "structure": structure}, conn_id)
+                        response = {"status": True, "structure": structure}
                     elif cmd == "inference":
                         output, inference_time = self.handle_inference(
                             request["model_id"],
                             request["layer_name"],
                             request["encrypted_input"],
                         )
-                        send_obj(
-                            conn, {"status": True, "encrypted_output": output, "inference_time": inference_time}, conn_id
-                        )
+                        response = {
+                            "status": True, 
+                            "encrypted_output": output, 
+                            "inference_time": inference_time
+                        }
                     else:
-                        send_obj(
-                            conn,
-                            {"status": False, "error": f"unknown command: {cmd}"},
-                            conn_id,
-                        )
+                        response = {
+                            "status": False, 
+                            "error": f"unknown command: {cmd}"
+                        }
                 except Exception as exc:
                     logger.exception(f"[CONN:{conn_id}] Error handling command {cmd}")
-                    send_obj(conn, {"status": False, "error": str(exc)}, conn_id)
+                    response = {"status": False, "error": str(exc)}
+
+                # Add timing information if the client sent a timestamp
+                if "client_send_timestamp" in request:
+                    response["server_receive_timestamp"] = server_receive_timestamp
+                    response["server_send_timestamp"] = time.time()  # Capture when we're about to send
+
+                send_obj(conn, response, conn_id)
         finally:
             conn.close()
             logger.info("closed connection %s:%s", *addr)
