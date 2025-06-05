@@ -81,12 +81,11 @@ class SupersayanClient(SupersayanModel):
         """
         sock = None
 
-        # Add client timestamp right before sending if timing is enabled
-        if self.enable_timing:
-            payload["client_send_timestamp"] = time.time()
-
         try:
             sock = socket.create_connection((self.host, self.port), timeout=timeout)
+
+            if self.enable_timing:
+                payload["client_send_timestamp"] = time.time()
             
             # Send the request
             conn_id = send_obj(sock, payload)
@@ -96,7 +95,6 @@ class SupersayanClient(SupersayanModel):
             )
             
             # Receive the response
-            client_receive_timestamp = time.time()
             response, _ = recv_obj(sock)
             client_receive_timestamp = time.time()  # Capture timestamp AFTER receiving
             
