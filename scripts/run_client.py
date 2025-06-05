@@ -318,27 +318,11 @@ def run_benchmarks(server: str = "127.0.0.1:8000") -> None:
 
     # Run benchmarks
     try:
-        # House price regression with 10 samples
-        results["benchmarks"].append(
-            benchmark_hybrid_house_price_regression(server, num_samples=10)
-        )
-    except Exception as e:
-        logger.error(f"House price regression benchmark failed: {e}")
-        results["benchmarks"].append({"model": "HousePriceRegressor", "error": str(e)})
-
-    try:
         # ResNet18 with 1 sample
         results["benchmarks"].append(benchmark_resnet18(server, num_samples=1))
     except Exception as e:
         logger.error(f"ResNet18 benchmark failed: {e}")
         results["benchmarks"].append({"model": "ResNet18", "error": str(e)})
-
-    try:
-        # MNIST CNN with 1 sample
-        results["benchmarks"].append(benchmark_mnist_cnn(server, num_samples=1))
-    except Exception as e:
-        logger.error(f"MNIST CNN benchmark failed: {e}")
-        results["benchmarks"].append({"model": "MNIST_CNN", "error": str(e)})
 
     # Save results
     output_file = Path("benchmark_results.json")
