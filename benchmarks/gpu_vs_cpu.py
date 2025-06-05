@@ -37,7 +37,7 @@ def fhe_secret_key():
 
 # Fixtures for encryption/decryption tests (support multi-dimensional arrays)
 @pytest.fixture(params=[
-    (1000, 1000, 1000),     # 3D medium
+    (100, 100, 100),     # 3D medium
 ])
 def encryption_shape_fixture(request):
     """Parameterized fixture for encryption/decryption tensor shapes."""
