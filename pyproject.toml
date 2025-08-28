@@ -10,7 +10,21 @@ authors = [
     {name = "bonsainoodle", email = "3sprix.exe@gmail.com"},
     {name = "franklintra", email = "franklin.tranie@gmail.com"}
 ]
+license = {text = "Apache-2.0"}
+readme = "README.md"
 requires-python = ">=3.9"
+keywords = [
+    "homomorphic-encryption",
+    "FHE",
+    "deep-learning",
+    "pytorch",
+    "privacy-preserving",
+    "cryptography",
+    "neural-networks",
+    "secure-computation",
+    "machine-learning",
+    "julia",
+]
 dependencies = [
     "numpy",
     "torch",
