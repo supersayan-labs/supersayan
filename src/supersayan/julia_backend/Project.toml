@@ -1,0 +1,16 @@
+name = "SupersayanTFHE"
+uuid = "a12e9ad3-89c3-4f2d-9f1a-6ddc5f8f58c0"
+version = "0.1.0"
+
+[deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+DLPack = "53c2dc0f-f7d5-43fd-8906-6c0220547083"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[compat]
+julia = "1.6"
+CUDA = "3, 4, 5"
+DLPack = "0.1"
+PythonCall = "0.9" 

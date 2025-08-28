@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supersayan"
+version = "0.1.0"
+description = "A high-performance Python library for fully homomorphic encryption (FHE) in deep learning, seamlessly integrated with PyTorch."
+authors = [
+    {name = "bonsainoodle", email = "3sprix.exe@gmail.com"},
+    {name = "franklintra", email = "franklin.tranie@gmail.com"}
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "torch",
+    "julia",
+    "pytest",
+    "pytest-benchmark",
+    "uvicorn",
+    "fastapi",
+    "requests",
+    "torchvision",
+    "websocket-client>=1.8.0",
+    "torchsummary>=1.5.1",
+    "scalene>=1.5.51",
+    "python-socketio>=5.13.0",
+    "simple-websocket>=1.1.0",
+    "juliacall>=0.9.25",
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+
+[project.scripts]
+supersayan-setup = "supersayan._setup:setup_julia_deps"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["supersayan*"]
+
+[tool.setuptools.package-data]
+supersayan = ["py.typed"]
+"supersayan.julia_backend" = ["Project.toml", "Manifest.toml"]
+
+[tool.uv]
+
+[tool.uv.sources]
+supersayan = { path = ".", editable = true }
+
+[dependency-groups]
+dev = [
+    "supersayan",
+]
