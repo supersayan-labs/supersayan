@@ -1,18 +1,13 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "supersayan"
-version = "0.1.0"
+version = "0.1.1"
 description = "A high-performance Python library for fully homomorphic encryption (FHE) in deep learning, seamlessly integrated with PyTorch."
-authors = [
-    {name = "bonsainoodle", email = "3sprix.exe@gmail.com"},
-    {name = "franklintra", email = "franklin.tranie@gmail.com"}
-]
-license = {text = "Apache-2.0"}
 readme = "README.md"
 requires-python = ">=3.9"
+authors = [
+    { name = "bonsainoodle", email = "3sprix.exe@gmail.com" },
+    { name = "franklintra", email = "franklin.tranie@gmail.com" },
+]
 keywords = [
     "homomorphic-encryption",
     "FHE",
@@ -26,48 +21,74 @@ keywords = [
     "julia",
 ]
 dependencies = [
-    "numpy",
-    "torch",
-    "julia",
-    "pytest",
-    "pytest-benchmark",
-    "uvicorn",
-    "fastapi",
-    "requests",
-    "torchvision",
+    "numpy>=1.24.0",
+    "torch>=2.0.0",
+    "julia>=0.6.0",
+    "uvicorn>=0.20.0",
+    "fastapi>=0.100.0",
+    "requests>=2.25.0",
+    "torchvision>=0.15.0",
     "websocket-client>=1.8.0",
     "torchsummary>=1.5.1",
-    "scalene>=1.5.51",
     "python-socketio>=5.13.0",
     "simple-websocket>=1.1.0",
     "juliacall>=0.9.25",
 ]
 
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent"
-]
+[project.urls]
+GitHub = "https://github.com/yourusername/supersayan"
 
 [project.scripts]
 supersayan-setup = "supersayan._setup:setup_julia_deps"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-benchmark>=4.0.0",
+    "ruff>=0.4.0",
+    "scalene>=1.5.51",
+]
+publish = [
+    "twine>=4.0.0",
+    "build>=0.10.0",
+]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["supersayan*"]
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.package-data]
 supersayan = ["py.typed"]
 "supersayan.julia_backend" = ["Project.toml", "Manifest.toml"]
 
-[tool.uv]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["supersayan", "supersayan.*"]
 
-[tool.uv.sources]
-supersayan = { path = ".", editable = true }
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
 
-[dependency-groups]
-dev = [
-    "supersayan",
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle (PEP8)
+    "W",   # warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # comprehensions
+    "SIM", # simplify
+    "TID",  # tidy imports
 ]
+ignore = [
+    "E203",  # whitespace before ':', Black-compatible
+    "E501",  # line length, let formatter handle
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
