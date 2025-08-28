@@ -73,8 +73,6 @@ For a runnable example of the TCP server, see `scripts/run_server.py`.
 
 Supported offloaded layers: `nn.Linear`, `nn.Conv2d`.
 
-Recommendation: For non‑trivial networks, the hybrid approach is the supported path for privacy‑preserving inference on selected layers.
-
 ## Tensors and Interop
 
 - `SupersayanTensor(data, device=...)` accepts `torch.Tensor`, `numpy.ndarray`, or `cupy.ndarray` and preserves dtype float32.
@@ -85,7 +83,6 @@ Recommendation: For non‑trivial networks, the hybrid approach is the supported
 
 - `src/supersayan/` core, layers, remote client/server, Julia backend
 - `scripts/` runnable examples (`run_server.py`)
-- `docs/` additional developer docs
 
 ## Troubleshooting
 
